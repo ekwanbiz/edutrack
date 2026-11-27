@@ -206,3 +206,15 @@ textarea.input { min-height: 160px; resize: vertical; line-height: 1.5; }
 .ax-grid.belum .ax-kad { opacity: .6; }
 @keyframes goyang { 0%,100% { transform: translateX(0) } 25% { transform: translateX(-6px) } 75% { transform: translateX(6px) } }
 .goyang { animation: goyang .3s ease 2; }
+
+/* ===== TaskTrack & Kutip Buku ===== */
+.alert-grid.dua { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.tt-aksi { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 8px; }
+.tt-aksi .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.kutip-bawah { position: relative; padding: 14px 18px calc(18px + env(safe-area-inset-bottom)); background: linear-gradient(transparent, rgba(0,0,0,.75) 30%); display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.kutip-kira { display: flex; align-items: baseline; gap: 6px; }
+.kutip-kira b { font-size: 44px; font-weight: 800; line-height: 1; }
+.kutip-kira span { font-size: 15px; opacity: .85; }
+.kutip-nama { min-height: 44px; text-align: center; font-size: 16px; font-weight: 700; padding: 0 8px; }
+.kutip-nama.ok { color: #86EFAC; }
+.kutip-nama.err { color: #FCA5A5; }

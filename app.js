@@ -164,8 +164,8 @@
   }
 
   var MODUL = [
-    { id: 'attendx', nama: 'AttendX', desc: 'Rekod kehadiran', rancang: ['Semua murid hadir secara default, tanda yang tidak hadir sahaja', 'Tekan lama untuk sebab: MC, Lewat, Ponteng, Aktiviti', 'Rekod setiap kali masuk kelas'] },
-    { id: 'tasktrack', nama: 'TaskTrack', desc: 'Kerja rumah · kutip buku', rancang: ['Beri kerja rumah dengan tajuk dan tarikh hantar', 'Tanda Siap / Tidak siap', 'Mod Kutip Buku: scan buku yang dihantar'] },
+    { id: 'attendx', nama: 'AttendX', desc: 'Rekod kehadiran', },
+    { id: 'tasktrack', nama: 'TaskTrack', desc: 'Kerja rumah · kutip buku', },
     { id: 'assessment', nama: 'Assessment', desc: 'PBD · kuiz · peperiksaan', rancang: ['PBD dengan butang TP1 hingga TP6', 'Markah kuiz dan peperiksaan dengan papan nombor besar', 'Auto ke murid seterusnya'] },
     { id: 'profil', nama: 'Student Profile', desc: 'Profil murid · QR' },
     { id: 'analisis', nama: 'Analisis', desc: 'Statistik · laporan', rancang: ['Ringkasan kehadiran, kerja rumah dan PBD kelas', 'Jana laporan PDF / Excel', 'Laporan individu murid'] },
@@ -235,6 +235,9 @@
       if (h[0] === 'urus' && h[1] === 'kelas' && h[2]) return renderUrusKelas(h[2]);
       if (h[0] === 'urus') return renderUrus();
       if (h[0] === 'modul' && h[1] === 'attendx' && h[2]) return renderAttendX(h[2], h[3]);
+      if (h[0] === 'modul' && h[1] === 'tasktrack' && h[2] && h[3]) return renderTugasan(h[2], h[3]);
+      if (h[0] === 'modul' && h[1] === 'tasktrack' && h[2]) return renderTaskTrack(h[2]);
+      if (h[0] === 'kutip' && h[1] && h[2]) return renderKutip(h[1], h[2]);
       if (h[0] === 'modul' && h[1]) return renderModul(h[1], h[2]);
       if (h[0] === 'cetak' && h[1]) return renderCetak(h[1]);
       if (h[0] === 'scan') return renderScan();
@@ -451,10 +454,9 @@
             '<button class="chip pill-btn" data-act="senarai-murid" data-id="' + k.id + '">' + bil + ' murid ' + I.chev.replace('width="18" height="18"', 'width="12" height="12"') + '</button></div></div>' +
           '<button class="banner-btn" data-act="senarai-murid" data-id="' + k.id + '" data-cari="1" aria-label="Cari murid dalam kelas ini">' + I.search + '</button>' +
         '</div>' +
-        '<div class="alert-grid">' +
+        '<div class="alert-grid dua">' +
           '<button class="alert" data-act="alert-lama" data-id="' + k.id + '"><b style="color:#DC2626" data-lama>…</b><span>Lama tak hadir</span></button>' +
-          '<button class="alert" data-act="alert"><b style="color:#EA580C">–</b><span>KR tak siap</span></button>' +
-          '<button class="alert" data-act="alert"><b style="color:#7C3AED">–</b><span>Buku tak hantar</span></button>' +
+          '<button class="alert" data-act="alert-kr" data-id="' + k.id + '"><b style="color:#EA580C" data-kr>…</b><span>KR tak siap</span></button>' +
         '</div>' +
       '</div>' +
       '<div class="modul-grid">' + MODUL.map(function (m) {
@@ -466,6 +468,7 @@
       '<div class="scan-wrap"><button class="scan-btn" data-act="scan">' + I.qr + 'Scan QR murid</button></div>' +
     '</div>';
     muatLamaTakHadir(k.id);
+    muatKrTertunggak(k.id);
   }
 
   /* Kotak "Lama tak hadir": murid tidak hadir 3 rekod terakhir berturut-turut. */
@@ -690,6 +693,254 @@
     var kiniTak = !!(r && r.hadir === false);
     setHadir(id, kiniTak, null); // tidak hadir -> hadir, hadir -> tidak hadir
   });
+
+  /* ---------- KR tak siap (banner) ---------- */
+  async function muatKrTertunggak(kelasId) {
+    var r = await sb.rpc('kr_tertunggak', { p_kelas: kelasId });
+    var el = $app.querySelector('[data-kr]');
+    if (!el) return;
+    if (r.error) { el.textContent = '–'; return; }
+    S.krTertunggak = { kelasId: kelasId, rows: r.data || [] };
+    el.textContent = String(S.krTertunggak.rows.length);
+  }
+
+  function sheetKrTertunggak(kelasId) {
+    var rows = (S.krTertunggak && S.krTertunggak.kelasId === kelasId) ? S.krTertunggak.rows : [];
+    var bil = {}; rows.forEach(function (x) { bil[x.murid_id] = x.bil; });
+    var list = muridKelas(kelasId).filter(function (m) { return bil[m.id]; });
+    openSheet('<div class="between"><h2>KR tak siap</h2><button class="icon-sm" data-act="sheet-close" aria-label="Tutup">' + I.close + '</button></div>' +
+      '<p class="sub" style="margin:0">Murid yang masih ada kerja rumah Tidak siap. Nama hilang sendiri bila semua sudah dihantar.</p>' +
+      '<div class="sheet-scroll">' + (list.length ? list.map(function (m) {
+        return '<button class="list-row" data-act="profil-murid" data-id="' + m.id + '"><span class="murid-av" style="width:36px;height:36px;font-size:13px;background:#FFEDD5;color:#C2410C">' + esc(inisial(m.nama)) + '</span><span class="grow" style="font-size:15px;font-weight:600">' + esc(m.nama) + '</span><span class="chip" style="background:#FFEDD5;color:#C2410C">' + bil[m.id] + ' tugasan</span></button>';
+      }).join('') : '<p class="sub" style="padding:12px 2px">Tiada murid. Semua sudah siap!</p>') + '</div>',
+      { label: 'KR tak siap' });
+  }
+
+  /* ---------- TaskTrack: senarai tugasan ---------- */
+  function kepalaModul(k, id, nama, balik) {
+    return '<div class="row"><a class="icon-btn" href="' + (balik || '#/kelas/' + k.id) + '" aria-label="Kembali">' + I.back + '</a><div class="row" style="gap:10px">' + logo(id, 40) + '<div><h2>' + nama + '</h2><span class="sub">' + esc(k.nama + (k.subjek ? ' · ' + k.subjek : '')) + '</span></div></div></div>';
+  }
+
+  async function renderTaskTrack(kelasId) {
+    var k = cariKelas(kelasId);
+    if (!k) return go('#/');
+    $app.innerHTML = '<div class="page">' + kepalaModul(k, 'tasktrack', 'TaskTrack') + '<p class="sub">Memuatkan…</p></div>';
+    var r = await sb.rpc('ringkasan_tugasan', { p_kelas: k.id, p_had: 100 });
+    if (r.error) throw r.error;
+    if (location.hash !== '#/modul/tasktrack/' + k.id) return;
+    var bil = muridKelas(k.id).length, list = r.data || [];
+    $app.innerHTML = '<div class="page">' + kepalaModul(k, 'tasktrack', 'TaskTrack') +
+      '<button class="btn block" data-act="tt-baru" data-id="' + k.id + '">+ Tugasan baharu</button>' +
+      (list.length ? '<div class="card list-card">' + list.map(function (t) {
+        var info = t.ditanda ? t.siap + '/' + bil + ' siap' : 'Belum ditanda';
+        return '<a class="list-item" href="#/modul/tasktrack/' + k.id + '/' + t.id + '"><span class="grow"><b style="display:block;font-size:15px">' + esc(t.tajuk) + '</b><span class="sub">' + esc(labelTarikh(t.tarikh, true)) + ' · ' + info + '</span></span>' +
+          (t.tidak_siap ? '<span class="chip" style="background:#FFEDD5;color:#C2410C">' + t.tidak_siap + ' tak siap</span>' : (t.ditanda ? '<span class="chip" style="background:var(--tint-now);color:var(--ok)">' + I.check + '</span>' : '')) +
+          '<span class="muted">' + I.chev + '</span></a>';
+      }).join('') + '</div>'
+      : '<div class="card empty"><p class="sub">Belum ada tugasan. Tekan <b>+ Tugasan baharu</b> untuk mula.</p></div>') +
+    '</div>';
+  }
+
+  function sheetTugasanBaru(kelasId, t) {
+    openSheet('<h2>' + (t ? 'Ubah tajuk' : 'Tugasan baharu') + '</h2>' +
+      '<form class="stack" style="gap:14px" data-form="tugasan" data-kelas="' + kelasId + '"' + (t ? ' data-id="' + t.id + '"' : '') + ' novalidate>' +
+        '<label class="field"><span>Tajuk</span><input class="input" name="tajuk" maxlength="120" placeholder="cth. Latihan m/s 34" value="' + (t ? esc(t.tajuk) : '') + '" required></label>' +
+        '<p class="error" data-err></p><button class="btn block" type="submit">' + (t ? 'Simpan' : 'Cipta') + '</button></form>',
+      { label: t ? 'Ubah tajuk' : 'Tugasan baharu', focus: 'input[name=tajuk]' });
+  }
+
+  async function simpanTugasan(form) {
+    var err = form.querySelector('[data-err]'), btn = form.querySelector('[type=submit]');
+    var tajuk = form.tajuk.value.trim();
+    if (!tajuk) { err.textContent = 'Tajuk tidak boleh kosong.'; return; }
+    btn.disabled = true;
+    var kelasId = form.dataset.kelas, id = form.dataset.id;
+    var r = id
+      ? await sb.from('tugasan').update({ tajuk: tajuk }).eq('id', id)
+      : await sb.from('tugasan').insert({ kelas_id: kelasId, tajuk: tajuk, tarikh: hariIni() }).select('id').single();
+    btn.disabled = false;
+    if (r.error) { err.textContent = errMsg(r.error); return; }
+    closeSheet();
+    if (id) { if (S.tt && S.tt.tugasan.id === id) { S.tt.tugasan.tajuk = tajuk; lukisTugasan(); } toast('Tajuk dikemas kini.'); }
+    else go('#/modul/tasktrack/' + kelasId + '/' + r.data.id);
+  }
+
+  async function padamTugasan() {
+    var tt = S.tt;
+    if (!confirm('Padam tugasan "' + tt.tugasan.tajuk + '"?\nSemua tanda Siap / Tidak siap untuk tugasan ini akan hilang dan tidak boleh dikembalikan.')) return;
+    var r = await sb.from('tugasan').delete().eq('id', tt.tugasan.id);
+    if (r.error) { toast(errMsg(r.error)); return; }
+    toast('Tugasan dipadam.');
+    go('#/modul/tasktrack/' + tt.kelasId);
+  }
+
+  /* ---------- TaskTrack: satu tugasan ---------- */
+  async function muatTugasan(kelasId, tugasanId) {
+    var res = await Promise.all([
+      sb.from('tugasan').select('id,tajuk,tarikh,kelas_id').eq('id', tugasanId).maybeSingle(),
+      sb.from('status_tugasan').select('murid_id,siap').eq('tugasan_id', tugasanId)
+    ]);
+    if (res[0].error) throw res[0].error;
+    if (res[1].error) throw res[1].error;
+    if (!res[0].data || res[0].data.kelas_id !== kelasId) return false;
+    var rows = {};
+    (res[1].data || []).forEach(function (x) { rows[x.murid_id] = x.siap; });
+    S.tt = { kelasId: kelasId, tugasan: res[0].data, rows: rows };
+    return true;
+  }
+
+  async function renderTugasan(kelasId, tugasanId) {
+    var k = cariKelas(kelasId);
+    if (!k) return go('#/');
+    $app.innerHTML = '<div class="page">' + kepalaModul(k, 'tasktrack', 'TaskTrack', '#/modul/tasktrack/' + k.id) + '<p class="sub">Memuatkan…</p></div>';
+    var ada = await muatTugasan(k.id, tugasanId);
+    if (location.hash !== '#/modul/tasktrack/' + k.id + '/' + tugasanId) return;
+    if (!ada) { toast('Tugasan tidak dijumpai.'); return go('#/modul/tasktrack/' + k.id); }
+    lukisTugasan();
+  }
+
+  function kiraTT() {
+    var tt = S.tt, murid = muridKelas(tt.kelasId), siap = 0, tak = 0, kosong = 0;
+    murid.forEach(function (m) { var v = tt.rows[m.id]; if (v === true) siap++; else if (v === false) tak++; else kosong++; });
+    return { murid: murid, siap: siap, tak: tak, kosong: kosong, mula: siap + tak > 0 };
+  }
+
+  function lukisTugasan() {
+    var tt = S.tt, k = cariKelas(tt.kelasId), c = kiraTT();
+    $app.innerHTML = '<div class="page">' + kepalaModul(k, 'tasktrack', 'TaskTrack', '#/modul/tasktrack/' + k.id) +
+      '<div class="card between" style="padding:12px 14px;gap:8px"><div class="grow" style="min-width:0"><b style="display:block;font-size:16px">' + esc(tt.tugasan.tajuk) + '</b><span class="sub">' + esc(labelTarikh(tt.tugasan.tarikh, true)) + '</span></div>' +
+        '<button class="icon-sm" data-act="tt-ubah" aria-label="Ubah tajuk">' + I.edit + '</button><button class="icon-sm" data-act="tt-padam" aria-label="Padam tugasan" style="color:var(--danger)">' + I.trash + '</button></div>' +
+      '<div class="card between" style="padding:14px 16px">' +
+        '<div class="row" style="align-items:baseline;gap:6px"><span style="font-size:30px;font-weight:800;color:var(--acc)" data-tt-siap>' + (c.mula ? c.siap : '–') + '</span><span class="sub">/ ' + c.murid.length + ' siap</span></div>' +
+        (c.tak ? '<span class="chip" style="background:#FFEDD5;color:#C2410C" data-tt-tak>' + c.tak + ' tidak siap</span>' : c.mula && !c.kosong ? '<span class="chip" style="background:var(--tint-now);color:var(--ok)" data-tt-tak>' + I.check + ' Semua siap</span>' : '<span class="chip" style="background:#FEF3C7;color:#92400E" data-tt-tak>' + (c.mula ? c.kosong + ' belum ditanda' : 'Belum ditanda') + '</span>') +
+      '</div>' +
+      (c.murid.length
+        ? '<div class="tt-aksi">' +
+            (c.kosong ? '<button class="btn" data-act="tt-semua" data-tt-semua>' + I.check + (c.mula ? ' Baki semua siap' : ' Semua siap') + '</button>' : '') +
+            '<button class="btn secondary" data-act="tt-kutip">' + I.qr.replace(/width="34" height="34"/, 'width="22" height="22"') + ' Kutip Buku</button>' +
+          '</div>' +
+          '<p class="sub" style="margin:0">' + (c.mula ? 'Tekan nama murid untuk tukar <b>Siap / Tidak siap</b>.' : 'Tekan <b>Semua siap</b> lalu tekan nama yang tidak siap, atau guna <b>Kutip Buku</b> untuk scan buku yang dihantar.') + '</p>' +
+          '<div class="ax-grid' + (c.mula ? '' : ' belum') + '" data-tt-grid>' + gridTugasan(c.murid) + '</div>'
+        : '<div class="card empty"><p class="sub">Belum ada murid dalam kelas ini.</p><a class="btn" href="#/urus/kelas/' + k.id + '">Tambah murid</a></div>') +
+    '</div>';
+  }
+
+  function gridTugasan(murid) {
+    var tt = S.tt;
+    return murid.map(function (m, i) {
+      var v = tt.rows[m.id], on = v === true, off = v === false;
+      return '<button class="ax-kad' + (off ? ' off' : on ? ' on' : '') + '" data-tt-murid="' + m.id + '" aria-label="' + esc(m.nama) + (off ? ', tidak siap' : on ? ', siap' : ', belum ditanda') + '">' +
+        '<span class="ax-nama">' + (m.no || i + 1) + '. ' + esc(namaPendek(m.nama)) + '</span>' +
+        '<span class="ax-st">' + (off ? '✗ Tidak siap' : on ? '✓ Siap' : '') + '</span></button>';
+    }).join('');
+  }
+
+  async function simpanStatus(pasangan) {
+    var tt = S.tt, sebelum = Object.assign({}, tt.rows);
+    pasangan.forEach(function (p) { tt.rows[p[0]] = p[1]; });
+    lukisTugasan();
+    var r = await sb.from('status_tugasan').upsert(pasangan.map(function (p) {
+      return { tugasan_id: tt.tugasan.id, murid_id: p[0], siap: p[1] };
+    }), { onConflict: 'tugasan_id,murid_id' });
+    if (r.error) { tt.rows = sebelum; lukisTugasan(); toast('Tidak disimpan: ' + errMsg(r.error)); return false; }
+    return true;
+  }
+
+  document.addEventListener('click', function (e) {
+    var el = e.target.closest('[data-tt-murid]');
+    if (!el || !S.tt) return;
+    var c = kiraTT(), id = el.dataset.ttMurid, v = S.tt.rows[id];
+    if (!c.mula) {
+      toast('Tekan "Semua siap" atau "Kutip Buku" dahulu.');
+      var b = $app.querySelector('[data-tt-semua]');
+      if (b) { b.classList.remove('goyang'); void b.offsetWidth; b.classList.add('goyang'); }
+      return;
+    }
+    simpanStatus([[id, v === false]]); // tidak siap -> siap; siap/kosong -> tidak siap
+  });
+
+  /* ---------- Kutip Buku: scan tanpa henti ---------- */
+  var bunyi = null;
+  function sediaBunyi() {
+    try { if (!bunyi) bunyi = new (window.AudioContext || window.webkitAudioContext)(); if (bunyi.state === 'suspended') bunyi.resume(); } catch (e) { bunyi = null; }
+  }
+  function bip(tinggi) {
+    if (!bunyi) return;
+    try {
+      var o = bunyi.createOscillator(), g = bunyi.createGain();
+      o.frequency.value = tinggi ? 1320 : 330; o.type = 'sine';
+      g.gain.setValueAtTime(0.25, bunyi.currentTime); g.gain.exponentialRampToValueAtTime(0.001, bunyi.currentTime + 0.15);
+      o.connect(g); g.connect(bunyi.destination); o.start(); o.stop(bunyi.currentTime + 0.16);
+    } catch (e) { /* abaikan */ }
+  }
+
+  async function renderKutip(kelasId, tugasanId) {
+    var k = cariKelas(kelasId);
+    if (!k) return go('#/');
+    if (!S.tt || S.tt.tugasan.id !== tugasanId) {
+      if (!(await muatTugasan(kelasId, tugasanId))) return go('#/modul/tasktrack/' + kelasId);
+    }
+    var tt = S.tt, murid = muridKelas(kelasId), dalamKelas = {};
+    murid.forEach(function (m) { dalamKelas[m.id] = m; });
+    var sudah = {}; // murid yang sudah dikira dalam sesi ini
+    $app.innerHTML = '<div class="scan-page">' +
+      '<video playsinline muted></video>' +
+      '<div class="scan-top"><button class="scan-btn-round" data-act="kutip-tutup" aria-label="Tutup">' + I.close + '</button><div style="text-align:center;min-width:0"><b style="display:block">Kutip Buku</b><span style="font-size:12px;opacity:.85">' + esc(tt.tugasan.tajuk) + '</span></div><span style="width:44px"></span></div>' +
+      '<div class="scan-frame" aria-hidden="true"></div>' +
+      '<div class="kutip-bawah">' +
+        '<div class="kutip-kira"><b data-kutip-n>0</b><span>/ ' + murid.length + ' buku</span></div>' +
+        '<div class="kutip-nama" data-kutip-msg>Halakan kamera ke QR buku. Scan terus satu demi satu.</div>' +
+        '<button class="btn block" data-act="kutip-selesai">Selesai</button>' +
+      '</div>' +
+    '</div>';
+    var video = $app.querySelector('video'), msg = $app.querySelector('[data-kutip-msg]'), nEl = $app.querySelector('[data-kutip-n]');
+    function kira() { nEl.textContent = String(murid.filter(function (m) { return tt.rows[m.id] === true; }).length); }
+    function tunjuk(t, jenis) { msg.textContent = t; msg.className = 'kutip-nama' + (jenis ? ' ' + jenis : ''); }
+    kira();
+    if (!window.QrScanner) { tunjuk('Pembaca QR gagal dimuatkan. Muat semula app.', 'err'); return; }
+    var abaiToken = {}; // QR bukan kelas ini: jangan ulang amaran setiap bingkai
+    var sc = new window.QrScanner(video, function (res) {
+      var t = ambilToken(res && res.data);
+      if (!t || abaiToken[t]) return;
+      var m = S.murid.filter(function (x) { return x.qr_token === t; })[0];
+      if (!m || !dalamKelas[m.id]) {
+        abaiToken[t] = true; setTimeout(function () { delete abaiToken[t]; }, 3000);
+        bip(false); if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
+        tunjuk(m ? m.nama + ' bukan murid kelas ini.' : 'QR ini bukan murid dalam senarai anda.', 'err');
+        return;
+      }
+      if (sudah[m.id]) return; // buku sama: senyap
+      sudah[m.id] = true;
+      var lama = tt.rows[m.id];
+      tt.rows[m.id] = true;
+      bip(true); if (navigator.vibrate) navigator.vibrate(40);
+      tunjuk('✓ ' + m.nama, 'ok'); kira();
+      if (lama === true) return; // sudah siap dari awal
+      sb.from('status_tugasan').upsert({ tugasan_id: tt.tugasan.id, murid_id: m.id, siap: true }, { onConflict: 'tugasan_id,murid_id' }).then(function (r) {
+        if (r.error) { tt.rows[m.id] = lama; delete sudah[m.id]; kira(); tunjuk('Tidak disimpan (' + m.nama + '): ' + errMsg(r.error), 'err'); }
+      });
+    }, { returnDetailedScanResult: true, preferredCamera: 'environment', maxScansPerSecond: 15, highlightScanRegion: false });
+    S.scanner = sc;
+    sc.start().catch(function (e) {
+      var m = String(e && (e.name || e.message || e));
+      if (/NotAllowed|Permission|denied/i.test(m)) tunjuk('Kebenaran kamera ditolak. Benarkan kamera untuk laman ini dalam tetapan pelayar.', 'err');
+      else tunjuk('Kamera tidak dapat dibuka: ' + m, 'err');
+    });
+  }
+
+  async function selesaiKutip() {
+    var tt = S.tt, murid = muridKelas(tt.kelasId);
+    var baki = murid.filter(function (m) { return tt.rows[m.id] === undefined; });
+    hentiScanner();
+    if (baki.length) {
+      var r = await sb.from('status_tugasan').upsert(baki.map(function (m) { return { tugasan_id: tt.tugasan.id, murid_id: m.id, siap: false }; }), { onConflict: 'tugasan_id,murid_id' });
+      if (r.error) { toast('Tidak disimpan: ' + errMsg(r.error)); return go('#/modul/tasktrack/' + tt.kelasId + '/' + tt.tugasan.id); }
+      baki.forEach(function (m) { tt.rows[m.id] = false; });
+    }
+    var tak = murid.filter(function (m) { return tt.rows[m.id] === false; }).length;
+    toast(tak ? tak + ' murid tidak hantar.' : 'Semua buku dihantar!');
+    go('#/modul/tasktrack/' + tt.kelasId + '/' + tt.tugasan.id);
+  }
 
   /* ---------- Modul (akan datang) ---------- */
   function renderModul(id, kelasId) {
@@ -981,7 +1232,8 @@
       '<span class="section-title">Rekod</span>' +
       '<div class="card list-card">' +
         '<div class="list-item" style="align-items:flex-start">' + logo('attendx', 36) + '<span class="grow" data-prof-hadir><b style="display:block">AttendX</b><span class="sub">Memuatkan…</span></span></div>' +
-        ['tasktrack', 'assessment'].map(function (mid) {
+        '<div class="list-item" style="align-items:flex-start">' + logo('tasktrack', 36) + '<span class="grow" data-prof-kr><b style="display:block">TaskTrack</b><span class="sub">Memuatkan…</span></span></div>' +
+        ['assessment'].map(function (mid) {
           var mm = MODUL.filter(function (x) { return x.id === mid; })[0];
           return '<div class="list-item">' + logo(mid, 36) + '<span class="grow"><b style="display:block">' + mm.nama + '</b><span class="sub">Akan dipaparkan bila modul ini siap</span></span></div>';
         }).join('') +
@@ -994,6 +1246,7 @@
       '</div>' +
     '</div>';
     muatHadirMurid(m.id, links);
+    muatKrMurid(m.id, links);
   }
 
   async function muatHadirMurid(muridId, links) {
@@ -1015,6 +1268,25 @@
         return '<span class="sub" style="display:block">' + esc(x.k.nama + (x.k.subjek ? ' · ' + x.k.subjek : '')) + ': <b style="color:' + (pct < 80 ? 'var(--danger)' : 'var(--ok)') + '">' + pct + '%</b> (' + x.hadir + '/' + x.jumlah + ')</span>';
       }).join('') +
       (tak.length ? '<span class="sub" style="display:block;margin-top:6px">Tidak hadir terkini: ' + tak.map(function (h) { return esc(labelTarikh(h.tarikh).replace('Hari ini · ', '') + (h.sebab ? ' (' + h.sebab + ')' : '')); }).join(', ') + '</span>' : '<span class="sub" style="display:block;margin-top:6px">Tiada rekod tidak hadir.</span>');
+  }
+
+  async function muatKrMurid(muridId, links) {
+    var r = await sb.from('status_tugasan').select('siap,tugasan(tajuk,tarikh,kelas_id)').eq('murid_id', muridId).limit(1000);
+    var el = $app.querySelector('[data-prof-kr]');
+    if (!el) return;
+    if (r.error) { el.innerHTML = '<b style="display:block">TaskTrack</b><span class="error">' + esc(errMsg(r.error)) + '</span>'; return; }
+    var data = (r.data || []).filter(function (x) { return x.tugasan; });
+    if (!data.length) { el.innerHTML = '<b style="display:block">TaskTrack</b><span class="sub">Belum ada rekod kerja rumah.</span>'; return; }
+    var perKelas = links.map(function (x) {
+      var d = data.filter(function (h) { return h.tugasan.kelas_id === x.k.id; });
+      return { k: x.k, jumlah: d.length, siap: d.filter(function (h) { return h.siap; }).length };
+    }).filter(function (x) { return x.jumlah > 0; });
+    var tak = data.filter(function (h) { return !h.siap; }).sort(function (a, b) { return a.tugasan.tarikh < b.tugasan.tarikh ? 1 : -1; });
+    el.innerHTML = '<b style="display:block">TaskTrack</b>' +
+      perKelas.map(function (x) {
+        return '<span class="sub" style="display:block">' + esc(x.k.nama + (x.k.subjek ? ' · ' + x.k.subjek : '')) + ': <b>' + x.siap + '/' + x.jumlah + '</b> siap</span>';
+      }).join('') +
+      (tak.length ? '<span class="sub" style="display:block;margin-top:6px;color:#C2410C"><b>Belum siap:</b> ' + tak.slice(0, 5).map(function (h) { return esc(h.tugasan.tajuk); }).join(', ') + (tak.length > 5 ? ' dan ' + (tak.length - 5) + ' lagi' : '') + '</span>' : '<span class="sub" style="display:block;margin-top:6px">Tiada kerja rumah tertunggak.</span>');
   }
 
   async function janaQrBaru(id) {
@@ -1062,6 +1334,14 @@
     'jana-qr': function (el) { janaQrBaru(el.dataset.id); },
     'alert': function () { toast('Akan aktif selepas modul TaskTrack siap.'); },
     'alert-lama': function (el) { sheetLamaTakHadir(el.dataset.id); },
+    'alert-kr': function (el) { sheetKrTertunggak(el.dataset.id); },
+    'tt-baru': function (el) { sheetTugasanBaru(el.dataset.id); },
+    'tt-ubah': function () { sheetTugasanBaru(S.tt.kelasId, S.tt.tugasan); },
+    'tt-padam': function () { padamTugasan(); },
+    'tt-semua': function () { var tt = S.tt; simpanStatus(muridKelas(tt.kelasId).filter(function (m) { return tt.rows[m.id] === undefined; }).map(function (m) { return [m.id, true]; })); },
+    'tt-kutip': function () { sediaBunyi(); go('#/kutip/' + S.tt.kelasId + '/' + S.tt.tugasan.id); },
+    'kutip-selesai': function () { selesaiKutip(); },
+    'kutip-tutup': function () { hentiScanner(); go('#/modul/tasktrack/' + S.tt.kelasId + '/' + S.tt.tugasan.id); },
     'ax-semua': function () { simpanSemuaHadir(); },
     'ax-pilih': function (el) { closeSheet(); setHadir(el.dataset.id, el.dataset.hadir === '1', el.dataset.sebab || null); },
     'senarai-murid': function (el) { sheetMurid(el.dataset.id, !!el.dataset.cari); },
@@ -1121,6 +1401,7 @@
 
   /* ---------- Borang ---------- */
   var FORM = {
+    'tugasan': simpanTugasan,
     'masuk': submitMasuk,
     'daftar': submitDaftar,
     'laluan-baru': async function (form) {
