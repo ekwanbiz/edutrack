@@ -7,12 +7,12 @@ App pengurusan kelas untuk guru (PWA). Dibina dengan HTML, CSS dan JavaScript bi
 - Akaun pertama yang mendaftar menjadi **admin**
 - Halaman utama: ucapan, kata semangat, carian murid/kelas, senarai kelas dengan pin
 - Halaman kelas: banner kelas, 6 modul, senarai murid
-- **Urus**: tambah/ubah/padam kelas, tampal senarai murid, salin murid dari kelas lain, ubah/buang murid
+- **Manage**: tambah/ubah/padam kelas, tampal senarai murid, salin murid dari kelas lain, ubah/buang murid
 - **Admin**: lihat & tukar kod pendaftaran, lulus/tolak guru
 - Mod cerah/gelap dan 4 tema
 - Boleh dipasang di skrin utama telefon (PWA) dan dibuka tanpa internet
 - **Cetak sticker QR** (label A4 3 × 8), **Scan QR** dengan kamera, dan **Student Profile** asas
-- **Analisis**: ringkasan kelas (30 hari / tahun ini / semua), carta kehadiran, KR, taburan TP, purata penilaian, senarai "Perlu perhatian" (had boleh ditetapkan), laporan kelas & individu (PDF A4 melalui cetak)
+- **Analysis**: ringkasan kelas (30 hari / tahun ini / semua), carta kehadiran, KR, taburan TP, purata penilaian, senarai "Perlu perhatian" (had boleh ditetapkan), laporan kelas & individu (PDF A4 melalui cetak)
 - **Assessment**: PBD ikut subjek (tulis/tampal Bab, pilih TP lalu tekan nama, "Semua → TP"), kuiz & peperiksaan (markah, purata, tertinggi, terendah)
 - **TaskTrack + Kutip Buku**: tugasan (tajuk sahaja), Siap / Tidak siap, scan buku tanpa henti, kotak "KR tak siap" (tertunggak)
 - **AttendX**: kehadiran harian (hadir / tidak hadir + sebab pilihan), sejarah, kotak "Lama tak hadir" (3 kali berturut-turut)

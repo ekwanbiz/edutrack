@@ -170,8 +170,8 @@
     { id: 'tasktrack', nama: 'TaskTrack', desc: 'Kerja rumah · kutip buku', },
     { id: 'assessment', nama: 'Assessment', desc: 'PBD · kuiz · peperiksaan', },
     { id: 'profil', nama: 'Student Profile', desc: 'Profil murid · QR' },
-    { id: 'analisis', nama: 'Analisis', desc: 'Statistik · laporan', },
-    { id: 'urus', nama: 'Urus', desc: 'Murid · kelas · QR' }
+    { id: 'analisis', nama: 'Analysis', desc: 'Statistik · laporan', },
+    { id: 'urus', nama: 'Manage', desc: 'Murid · kelas · QR' }
   ];
 
   /* ---------- Sheet ---------- */
@@ -362,7 +362,7 @@
       '<div class="row" style="gap:8px">' +
         '<button class="icon-btn" data-act="mod" aria-label="' + (isMod('dark') ? 'Tukar ke mod cerah' : 'Tukar ke mod gelap') + '">' + (isMod('dark') ? I.sun : I.moon) + '</button>' +
         '<button class="icon-btn" data-act="tema" aria-label="Pilih tema">' + I.palette + '</button>' +
-        '<a class="avatar-btn" href="#/urus" aria-label="Akaun dan urus">' + esc(inisial(S.profil.nama)) + '</a>' +
+        '<a class="avatar-btn" href="#/urus" aria-label="Akaun dan Manage">' + esc(inisial(S.profil.nama)) + '</a>' +
       '</div></div>';
   }
 
@@ -508,12 +508,12 @@
       '<div class="between"><h2>Murid ' + esc(k.nama) + ' <span style="color:var(--acc)" data-bil>(' + bilMurid(k.id) + ')</span></h2><button class="icon-sm" data-act="sheet-close" aria-label="Tutup senarai">' + I.close + '</button></div>' +
       '<label class="search" style="box-shadow:none;background:var(--soft)">' + I.search + '<span class="sr">Cari nama murid</span><input type="search" data-input="cari-murid" data-id="' + k.id + '" placeholder="Cari nama murid" autocomplete="off"></label>' +
       '<div class="sheet-scroll" data-murid-list>' + senaraiMuridHtml(k.id, '') + '</div>' +
-      '<a class="btn secondary block" href="#/urus/kelas/' + k.id + '">Urus murid kelas ini</a>',
+      '<a class="btn secondary block" href="#/urus/kelas/' + k.id + '">Manage murid kelas ini</a>',
       { tall: true, label: 'Senarai murid', focus: fokusCari ? 'input[data-input=cari-murid]' : null });
   }
   function senaraiMuridHtml(kelasId, q) {
     var list = muridKelas(kelasId).filter(function (m) { return !q || m.nama.toLowerCase().indexOf(q.toLowerCase()) >= 0; });
-    if (!list.length) return '<p class="sub" style="padding:12px 2px">' + (q ? 'Tiada murid sepadan.' : 'Belum ada murid. Tambah murid melalui Urus.') + '</p>';
+    if (!list.length) return '<p class="sub" style="padding:12px 2px">' + (q ? 'Tiada murid sepadan.' : 'Belum ada murid. Tambah murid melalui Manage.') + '</p>';
     return list.map(function (m, i) {
       return '<button class="list-row" data-act="profil-murid" data-id="' + m.id + '"><span style="width:24px;font-size:12px;font-weight:700;color:var(--muted)">' + (m.no || i + 1) + '</span><span class="murid-av" style="width:36px;height:36px;font-size:13px">' + esc(inisial(m.nama)) + '</span><span class="grow" style="font-size:15px;font-weight:600">' + esc(m.nama) + '</span><span class="muted">' + I.chev + '</span></button>';
     }).join('');
@@ -1262,7 +1262,7 @@
     var tabs = '<div class="seg">' + Object.keys(TEMPOH).map(function (t) {
       return '<button data-act="an-tempoh" data-id="' + k.id + '" data-t="' + t + '" aria-pressed="' + (t === tempoh) + '">' + TEMPOH[t] + '</button>';
     }).join('') + '</div>';
-    var kepala = kepalaModul(k, 'analisis', 'Analisis');
+    var kepala = kepalaModul(k, 'analisis', 'Analysis');
     $app.innerHTML = '<div class="page">' + kepala + tabs + '<p class="sub">Memuatkan…</p></div>';
     var an = await muatAnalisis(k, tempoh);
     if (location.hash !== hash) return;
@@ -1504,7 +1504,7 @@
   async function renderUrus() {
     var admin = S.profil.peranan === 'admin';
     $app.innerHTML = '<div class="page">' +
-      '<div class="row"><a class="icon-btn" href="#/" aria-label="Kembali ke halaman utama">' + I.back + '</a><div class="row" style="gap:10px">' + logo('urus', 40) + '<h2>Urus</h2></div></div>' +
+      '<div class="row"><a class="icon-btn" href="#/" aria-label="Kembali ke halaman utama">' + I.back + '</a><div class="row" style="gap:10px">' + logo('urus', 40) + '<h2>Manage</h2></div></div>' +
       '<span class="section-title">Akaun</span>' +
       '<form class="card stack" style="padding:16px;gap:12px" data-form="akaun" novalidate>' +
         '<label class="field"><span>Nama</span><input class="input" name="nama" value="' + esc(S.profil.nama) + '"></label>' +
@@ -1557,7 +1557,7 @@
     var murid = muridKelas(k.id);
     var lain = S.kelas.filter(function (x) { return x.id !== k.id && bilMurid(x.id) > 0; });
     $app.innerHTML = '<div class="page">' +
-      '<div class="row"><a class="icon-btn" href="#/kelas/' + k.id + '" aria-label="Kembali ke ' + esc(k.nama) + '">' + I.back + '</a><div class="row" style="gap:10px">' + logo('urus', 40) + '<div><h2>Urus ' + esc(k.nama) + '</h2><span class="sub">' + esc(k.subjek || '') + '</span></div></div></div>' +
+      '<div class="row"><a class="icon-btn" href="#/kelas/' + k.id + '" aria-label="Kembali ke ' + esc(k.nama) + '">' + I.back + '</a><div class="row" style="gap:10px">' + logo('urus', 40) + '<div><h2>Manage ' + esc(k.nama) + '</h2><span class="sub">' + esc(k.subjek || '') + '</span></div></div></div>' +
 
       '<span class="section-title">Maklumat kelas</span>' +
       '<form class="card stack" style="padding:16px;gap:12px" data-form="kelas-edit" data-id="' + k.id + '" novalidate>' +
