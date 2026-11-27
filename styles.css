@@ -191,3 +191,11 @@ textarea.input { min-height: 160px; resize: vertical; line-height: 1.5; }
 .profil-av { width: 76px; height: 76px; border-radius: 26px; color: #fff; font-size: 26px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
 .qr-box { width: 168px; height: 168px; padding: 10px; background: #fff; border-radius: 16px; }
 .qr-box svg { width: 100%; height: 100%; display: block; }
+
+/* ===== AttendX ===== */
+.ax-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.ax-kad { min-height: 58px; border-radius: 14px; padding: 8px 9px; border: 1.5px solid var(--line); background: var(--card); color: var(--text); display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; text-align: left; min-width: 0; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: manipulation; }
+.ax-kad .ax-nama { font-size: 13px; font-weight: 700; line-height: 1.25; max-width: 100%; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.ax-kad .ax-st { font-size: 11px; font-weight: 700; }
+.ax-kad.off { background: #FFEDD5; border-color: #EA580C; color: #9A3412; }
+[data-mode="dark"] .ax-kad.off { background: #431407; border-color: #FB923C; color: #FED7AA; }

@@ -12,9 +12,10 @@ App pengurusan kelas untuk guru (PWA). Dibina dengan HTML, CSS dan JavaScript bi
 - Mod cerah/gelap dan 4 tema
 - Boleh dipasang di skrin utama telefon (PWA) dan dibuka tanpa internet
 - **Cetak sticker QR** (label A4 3 × 8), **Scan QR** dengan kamera, dan **Student Profile** asas
+- **AttendX**: kehadiran harian (hadir / tidak hadir + sebab pilihan), sejarah, kotak "Lama tak hadir" (3 kali berturut-turut)
 
 ## Akan datang
-AttendX, TaskTrack, Assessment, Analisis, rekod dalam Student Profile, dan Kutip Buku.
+TaskTrack (+ Kutip Buku), Assessment dan Analisis.
 
 ## Fail
 | Fail | Fungsi |
