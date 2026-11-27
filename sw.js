@@ -1,5 +1,5 @@
 // Service worker EduTrack: simpan fail app supaya boleh dibuka tanpa internet.
-const CACHE = 'edutrack-v3';
+const CACHE = 'edutrack-v4';
 const FILES = [
   './',
   './index.html',

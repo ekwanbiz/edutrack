@@ -199,3 +199,10 @@ textarea.input { min-height: 160px; resize: vertical; line-height: 1.5; }
 .ax-kad .ax-st { font-size: 11px; font-weight: 700; }
 .ax-kad.off { background: #FFEDD5; border-color: #EA580C; color: #9A3412; }
 [data-mode="dark"] .ax-kad.off { background: #431407; border-color: #FB923C; color: #FED7AA; }
+.ax-kad.on { border-color: #16A34A; background: #F0FDF4; }
+.ax-kad.on .ax-st { color: #15803D; }
+[data-mode="dark"] .ax-kad.on { background: #052E16; border-color: #22C55E; }
+[data-mode="dark"] .ax-kad.on .ax-st { color: #86EFAC; }
+.ax-grid.belum .ax-kad { opacity: .6; }
+@keyframes goyang { 0%,100% { transform: translateX(0) } 25% { transform: translateX(-6px) } 75% { transform: translateX(6px) } }
+.goyang { animation: goyang .3s ease 2; }

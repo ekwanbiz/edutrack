@@ -547,16 +547,18 @@
       '</div>' +
 
       '<div class="card between" style="padding:14px 16px">' +
-        '<div class="row" style="align-items:baseline;gap:6px"><span style="font-size:30px;font-weight:800;color:var(--acc)" data-ax-hadir>' + (murid.length - tak) + '</span><span class="sub">/ ' + murid.length + ' hadir</span></div>' +
+        '<div class="row" style="align-items:baseline;gap:6px"><span style="font-size:30px;font-weight:800;color:var(--acc)" data-ax-hadir>' + (ax.ada ? murid.length - tak : '–') + '</span><span class="sub">/ ' + murid.length + ' hadir</span></div>' +
         (ax.ada
           ? '<span class="chip" style="background:var(--tint-now);color:var(--ok)" data-ax-status>' + I.check + ' Disimpan</span>'
           : '<span class="chip" style="background:#FEF3C7;color:#92400E" data-ax-status>Belum direkod</span>') +
       '</div>' +
 
       (murid.length
-        ? '<p class="sub" style="margin:0">Tekan nama murid yang <b>tidak hadir</b>. Tekan lama untuk pilih sebab.</p>' +
-          '<div class="ax-grid" data-ax-grid>' + gridAttendX(murid) + '</div>' +
-          (!ax.ada ? '<button class="btn block" data-act="ax-semua">' + I.check + ' Semua hadir, simpan</button>' : '')
+        ? (!ax.ada
+            ? '<button class="btn block" data-act="ax-semua" data-ax-semua>' + I.check + ' Semua hadir</button>' +
+              '<p class="sub" style="margin:0">Tekan <b>Semua hadir</b> dahulu, kemudian tekan nama murid yang tidak hadir.</p>'
+            : '<p class="sub" style="margin:0">Tekan nama murid yang <b>tidak hadir</b>. Tekan lama untuk pilih sebab.</p>') +
+          '<div class="ax-grid' + (ax.ada ? '' : ' belum') + '" data-ax-grid>' + gridAttendX(murid) + '</div>'
         : '<div class="card empty"><p class="sub">Belum ada murid dalam kelas ini.</p><a class="btn" href="#/urus/kelas/' + k.id + '">Tambah murid</a></div>') +
 
       '<span class="section-title" style="margin-top:6px">Sejarah</span>' +
@@ -570,10 +572,10 @@
   function gridAttendX(murid) {
     var ax = S.ax;
     return murid.map(function (m, i) {
-      var r = ax.rows[m.id], off = r && r.hadir === false;
-      return '<button class="ax-kad' + (off ? ' off' : '') + '" data-ax-murid="' + m.id + '" aria-pressed="' + !!off + '" aria-label="' + esc(m.nama) + (off ? ', tidak hadir' : ', hadir') + '">' +
+      var r = ax.rows[m.id], off = r && r.hadir === false, on = ax.ada && !off;
+      return '<button class="ax-kad' + (off ? ' off' : on ? ' on' : '') + '" data-ax-murid="' + m.id + '" aria-pressed="' + !!off + '" aria-label="' + esc(m.nama) + (off ? ', tidak hadir' : on ? ', hadir' : ', belum ditanda') + '">' +
         '<span class="ax-nama">' + (m.no || i + 1) + '. ' + esc(namaPendek(m.nama)) + '</span>' +
-        '<span class="ax-st">' + (off ? esc(r.sebab || 'Tidak hadir') : '') + '</span></button>';
+        '<span class="ax-st">' + (off ? '✗ ' + esc(r.sebab || 'Tidak hadir') : on ? '✓ Hadir' : '') + '</span></button>';
     }).join('');
   }
 
@@ -581,7 +583,7 @@
     var ax = S.ax, k = cariKelas(ax.kelasId), murid = muridKelas(k.id);
     var tak = murid.filter(function (m) { return ax.rows[m.id] && ax.rows[m.id].hadir === false; }).length;
     var g = $app.querySelector('[data-ax-grid]'); if (g) g.innerHTML = gridAttendX(murid);
-    var h = $app.querySelector('[data-ax-hadir]'); if (h) h.textContent = String(murid.length - tak);
+    var h = $app.querySelector('[data-ax-hadir]'); if (h) h.textContent = ax.ada ? String(murid.length - tak) : '–';
   }
 
   /* Simpan satu murid. Jika hari ini belum direkod, cipta rekod untuk SEMUA murid sekali gus. */
@@ -619,7 +621,7 @@
     payload.forEach(function (p) { ax.rows[p.murid_id] = { hadir: true, sebab: null }; });
     ax.ada = true;
     await muatSejarah();
-    toast('Kehadiran disimpan: semua hadir.');
+    toast('Semua hadir. Tekan nama murid yang tidak hadir.');
   }
 
   async function muatSejarah() {
@@ -663,6 +665,7 @@
     if (!el) return;
     tekanLama.fired = false;
     clearTimeout(tekanLama.timer);
+    if (!S.ax || !S.ax.ada) return;
     tekanLama.timer = setTimeout(function () {
       tekanLama.fired = true;
       if (navigator.vibrate) navigator.vibrate(30);
@@ -677,6 +680,12 @@
     var el = e.target.closest('[data-ax-murid]');
     if (!el) return;
     if (tekanLama.fired) { tekanLama.fired = false; return; }
+    if (!S.ax.ada) {
+      toast('Tekan "Semua hadir" dahulu.');
+      var b = $app.querySelector('[data-ax-semua]');
+      if (b) { b.classList.remove('goyang'); void b.offsetWidth; b.classList.add('goyang'); }
+      return;
+    }
     var id = el.dataset.axMurid, r = S.ax.rows[id];
     var kiniTak = !!(r && r.hadir === false);
     setHadir(id, kiniTak, null); // tidak hadir -> hadir, hadir -> tidak hadir
