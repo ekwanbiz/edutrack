@@ -17,6 +17,16 @@ App pengurusan kelas untuk guru (PWA). Dibina dengan HTML, CSS dan JavaScript bi
 - **TaskTrack + Kutip Buku**: tugasan (tajuk sahaja), Siap / Tidak siap, scan buku tanpa henti, kotak "KR tak siap" (tertunggak)
 - **AttendX**: kehadiran harian (hadir / tidak hadir + sebab pilihan), sejarah, kotak "Lama tak hadir" (3 kali berturut-turut)
 
+
+## Tambahan (28 Nov 2026)
+- Rekod tanpa internet untuk AttendX dan TaskTrack/Kutip Buku (peti keluar dalam telefon, dihantar automatik)
+- Muat turun semua data (CSV) di Manage
+- Helaian salin ke idMe, gred huruf, ulasan guru automatik, kongsi ringkasan murid (gambar)
+- Sepanduk versi baharu; mesej kamera yang mengesan pelayar mini; skrin tidak malap semasa scan
+- GitHub Actions `Jaga Supabase` setiap hari supaya projek percuma tidak dijeda
+
+**Naik versi:** tukar `VERSI` dalam `app.js`, `version.json` dan `CACHE` dalam `sw.js` serentak.
+
 ## Status
 Semua 6 modul siap (27 Nov 2026).
 

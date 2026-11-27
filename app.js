@@ -12,7 +12,7 @@
   var $toast = document.getElementById('toast');
 
   /* Nombor versi app. Naikkan SERENTAK dengan version.json dan CACHE dalam sw.js. */
-  var VERSI = '9';
+  var VERSI = '10';
 
   var S = { session: null, profil: null, kelas: [], murid: [], loaded: false, q: '', authTab: 'masuk', recovery: false, scanner: null };
 
@@ -232,7 +232,11 @@
     if (!S.session) return null;
     if (S.profil && !force) return S.profil;
     var r = await sb.from('profil').select('*').eq('id', S.session.user.id).maybeSingle();
-    if (r.error) throw r.error;
+    if (r.error) {
+      var c = rangkaianGagal(r.error) && bacaCache();
+      if (c && c.profil) { S.profil = c.profil; S.luarTalian = true; return S.profil; }
+      throw r.error;
+    }
     S.profil = r.data;
     return r.data;
   }
@@ -243,11 +247,17 @@
       sb.from('kelas').select('id,nama,subjek,warna,disemat,dicipta').order('dicipta'),
       sb.from('murid').select('id,nama,qr_token,kelas_murid(kelas_id,no_giliran)').order('nama')
     ]);
-    if (res[0].error) throw res[0].error;
-    if (res[1].error) throw res[1].error;
+    var e = res[0].error || res[1].error;
+    if (e) {
+      var c = rangkaianGagal(e) && bacaCache();
+      if (!c) throw e;
+      S.kelas = c.kelas || []; S.murid = c.murid || []; S.loaded = true; S.luarTalian = true;
+      return;
+    }
     S.kelas = res[0].data || [];
     S.murid = res[1].data || [];
-    S.loaded = true;
+    S.loaded = true; S.luarTalian = false;
+    simpanCache();
   }
 
   function muridKelas(kelasId) {
@@ -262,6 +272,136 @@
   function bilMurid(kelasId) { return muridKelas(kelasId).length; }
   function muridAktif() { return S.murid.filter(function (m) { return (m.kelas_murid || []).length > 0; }); }
   function cariKelas(id) { return S.kelas.filter(function (k) { return k.id === id; })[0]; }
+
+  /* ---------- Rekod tanpa internet ----------
+     Peti keluar (outbox) dalam telefon: rekod AttendX & TaskTrack yang gagal dihantar kerana tiada internet
+     disimpan dahulu, kemudian dihantar automatik bila ada isyarat. Satu kunci = satu baris (murid + tarikh /
+     murid + tugasan), jadi hantar dua kali tidak mencipta rekod berganda. Rekod yang ditolak pelayan TIDAK
+     dipadam senyap: ia ditanda "gagal" dan guru yang memutuskan. */
+  var JADUAL_LUAR = { kehadiran: 'kelas_id,murid_id,tarikh', status_tugasan: 'tugasan_id,murid_id' };
+  function uid() { return S.session ? S.session.user.id : 'x'; }
+  function simpanLS(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } }
+  function bacaLS(k, d) { try { var v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } }
+  function bacaOutbox() { return bacaLS('et_outbox_' + uid(), []); }
+  function tulisOutbox(a) { return simpanLS('et_outbox_' + uid(), a); }
+  function kunciBaris(t, r) { return t + '|' + JADUAL_LUAR[t].split(',').map(function (c) { return r[c]; }).join('|'); }
+  function rangkaianGagal(e) {
+    if (navigator.onLine === false) return true;
+    var m = String((e && (e.message || e.code)) || e || '');
+    return /Failed to fetch|Load failed|NetworkError|network|fetch|timeout|JWT|PGRST301/i.test(m);
+  }
+  function masukOutbox(t, rows) {
+    var ob = bacaOutbox(), idx = {}, now = Date.now();
+    ob.forEach(function (x, i) { idx[x.k] = i; });
+    rows.forEach(function (r) {
+      var k = kunciBaris(t, r), item = { k: k, t: t, r: r, w: now };
+      if (idx[k] !== undefined) ob[idx[k]] = item; else { idx[k] = ob.length; ob.push(item); }
+    });
+    var ok = tulisOutbox(ob);
+    kemasPetunjukOutbox();
+    return ok;
+  }
+  function keluarkanOutbox(dihantar) { // dihantar: { kunci: masa_tulis }
+    var ob = bacaOutbox();
+    var baki = ob.filter(function (x) { return !(dihantar[x.k] !== undefined && x.w <= dihantar[x.k]); });
+    if (baki.length !== ob.length) tulisOutbox(baki);
+  }
+  var maklumLuar = false;
+  async function simpanRekod(t, rows) {
+    var mula = Date.now();
+    if (navigator.onLine === false) return masukOutbox(t, rows) ? { luar: true } : { error: { message: 'Storan telefon penuh. Rekod tidak disimpan.' } };
+    var r = await sb.from(t).upsert(rows, { onConflict: JADUAL_LUAR[t] });
+    if (r.error && rangkaianGagal(r.error)) return masukOutbox(t, rows) ? { luar: true } : { error: r.error };
+    if (r.error) return { error: r.error };
+    var d = {}; rows.forEach(function (x) { d[kunciBaris(t, x)] = mula; });
+    keluarkanOutbox(d); // rekod lama dalam peti untuk murid yang sama sudah tidak relevan
+    kemasPetunjukOutbox();
+    return { ok: true };
+  }
+  function maklumLuarTalian(res) {
+    if (res && res.luar && !maklumLuar) { maklumLuar = true; toast('Tiada internet. Rekod disimpan dalam telefon dan akan dihantar automatik.'); }
+  }
+  function rekodLuar(t, tapis) {
+    var o = {};
+    bacaOutbox().forEach(function (x) { if (x.t === t && tapis(x.r)) o[x.k] = x.r; });
+    return Object.keys(o).map(function (k) { return o[k]; });
+  }
+
+  var hantarSibuk = false;
+  async function hantarOutbox(tunjuk) {
+    if (hantarSibuk || !S.session) return;
+    var ob = bacaOutbox().filter(function (x) { return !x.gagal; });
+    if (!ob.length) { if (tunjuk) toast('Tiada rekod untuk dihantar.'); kemasPetunjukOutbox(); return; }
+    if (navigator.onLine === false) { if (tunjuk) toast('Masih tiada internet.'); return; }
+    hantarSibuk = true;
+    var terhenti = false, berjaya = 0, gagal = 0;
+    try {
+      for (var t in JADUAL_LUAR) {
+        var items = ob.filter(function (x) { return x.t === t; });
+        for (var i = 0; i < items.length && !terhenti; i += 300) {
+          var cebis = items.slice(i, i + 300);
+          var r = await sb.from(t).upsert(cebis.map(function (x) { return x.r; }), { onConflict: JADUAL_LUAR[t] });
+          if (!r.error) { var d = {}; cebis.forEach(function (x) { d[x.k] = x.w; }); keluarkanOutbox(d); berjaya += cebis.length; continue; }
+          if (rangkaianGagal(r.error)) { terhenti = true; break; }
+          // Ralat lain: hantar satu-satu untuk kenal pasti rekod yang ditolak.
+          for (var j = 0; j < cebis.length; j++) {
+            var x = cebis[j], r1 = await sb.from(t).upsert([x.r], { onConflict: JADUAL_LUAR[t] });
+            if (!r1.error) { var d1 = {}; d1[x.k] = x.w; keluarkanOutbox(d1); berjaya++; }
+            else if (rangkaianGagal(r1.error)) { terhenti = true; break; }
+            else { tandaGagal(x, errMsg(r1.error)); gagal++; }
+          }
+        }
+        if (terhenti) break;
+      }
+    } finally { hantarSibuk = false; kemasPetunjukOutbox(); if (S.ax && $app.querySelector('[data-ax-status]')) segarAttendX(); }
+    if (berjaya && !terhenti) maklumLuar = false;
+    if (tunjuk || berjaya || gagal) toast(terhenti ? 'Sambungan terputus. Akan cuba lagi.' : gagal ? berjaya + ' rekod dihantar, ' + gagal + ' ditolak. Tekan petunjuk untuk butiran.' : berjaya + ' rekod tertangguh telah dihantar.');
+  }
+  function tandaGagal(x, sebab) {
+    var ob = bacaOutbox();
+    ob.forEach(function (y) { if (y.k === x.k && y.w === x.w) { y.gagal = true; y.sebab = sebab; } });
+    tulisOutbox(ob);
+  }
+  function kiraOutbox() {
+    var ob = bacaOutbox();
+    return { tunggu: ob.filter(function (x) { return !x.gagal; }).length, gagal: ob.filter(function (x) { return x.gagal; }).length };
+  }
+  function htmlOutbox() {
+    var c = kiraOutbox();
+    if (!c.tunggu && !c.gagal) return '';
+    return '<button class="outbox-bar' + (c.gagal && !c.tunggu ? ' gagal' : '') + '" data-act="outbox">' +
+      (c.tunggu ? '⏳ ' + c.tunggu + ' rekod belum dihantar' : '') + (c.tunggu && c.gagal ? ' · ' : '') + (c.gagal ? '⚠ ' + c.gagal + ' ditolak' : '') + '<b>' + (c.tunggu ? 'Hantar' : 'Lihat') + '</b></button>';
+  }
+  function kemasPetunjukOutbox() {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-outbox]'), function (el) { el.innerHTML = htmlOutbox(); });
+    var sc = $app.querySelector('[data-saved]'); if (sc) sc.outerHTML = savedChip();
+  }
+  function sheetOutbox() {
+    var ob = bacaOutbox(), c = kiraOutbox();
+    var nama = {}; S.murid.forEach(function (m) { nama[m.id] = m.nama; });
+    var gagal = ob.filter(function (x) { return x.gagal; });
+    openSheet('<div class="between"><h2>Rekod dalam telefon</h2><button class="icon-sm" data-act="sheet-close" aria-label="Tutup">' + I.close + '</button></div>' +
+      '<p class="sub" style="margin:0">' + (c.tunggu ? '<b>' + c.tunggu + ' rekod</b> disimpan dalam telefon kerana tiada internet. Ia akan dihantar automatik bila ada isyarat. <b>Jangan log keluar</b> sebelum ia dihantar.' : 'Tiada rekod menunggu.') + '</p>' +
+      (c.tunggu ? '<button class="btn block" data-act="outbox-hantar">Hantar sekarang</button>' : '') +
+      (gagal.length ? '<span class="section-title" style="margin-top:6px">Ditolak oleh pelayan (' + gagal.length + ')</span><p class="sub" style="margin:0">Biasanya kerana murid sudah dibuang dari kelas atau tugasan sudah dipadam. Rekod ini tidak dipadam sendiri.</p>' +
+        '<div class="sheet-scroll">' + gagal.slice(0, 50).map(function (x) {
+          var r = x.r, apa = x.t === 'kehadiran' ? 'Kehadiran ' + tarikhDMY(r.tarikh) + ': ' + (r.hadir ? 'Hadir' : 'Tidak hadir') : 'Kerja rumah: ' + (r.siap ? 'Siap' : 'Tidak siap');
+          return '<div class="list-row"><span class="grow"><b style="display:block;font-size:14px">' + esc(nama[r.murid_id] || 'Murid tidak dijumpai') + '</b><span class="sub">' + esc(apa) + ' · ' + esc(x.sebab || '') + '</span></span></div>';
+        }).join('') + '</div><button class="btn danger block" data-act="outbox-buang">Buang ' + gagal.length + ' rekod yang ditolak</button>' : ''),
+      { label: 'Rekod dalam telefon' });
+  }
+
+  /* Salinan kecil dalam telefon supaya app boleh dibuka tanpa internet. Dipadam semasa log keluar. */
+  function simpanCache() { simpanLS('et_cache_' + uid(), { profil: S.profil, kelas: S.kelas, murid: S.murid, t: Date.now() }); }
+  function bacaCache() { return bacaLS('et_cache_' + uid(), null); }
+  function padamCacheTelefon() {
+    var buang = [];
+    for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (/^et_(cache|outbox)_/.test(k)) buang.push(k); }
+    buang.forEach(function (k) { localStorage.removeItem(k); });
+  }
+  window.addEventListener('online', function () { hantarOutbox(false); });
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible' && navigator.onLine !== false) hantarOutbox(false); });
+  setInterval(function () { if (navigator.onLine !== false && kiraOutbox().tunggu) hantarOutbox(false); }, 30000);
 
   /* ---------- Router ---------- */
   async function route() {
@@ -427,7 +567,8 @@
   }
 
   function savedChip() {
-    var on = navigator.onLine !== false;
+    var on = navigator.onLine !== false, c = kiraOutbox();
+    if (c.tunggu || c.gagal) return '<button class="saved off" data-saved data-act="outbox">' + (c.tunggu ? '⏳ ' + c.tunggu + ' rekod belum dihantar' : '⚠ ' + c.gagal + ' rekod ditolak') + '</button>';
     return '<span class="saved' + (on ? '' : ' off') + '" data-saved>' + (on ? I.check + 'Semua rekod disimpan' : 'Luar talian') + '</span>';
   }
 
@@ -576,12 +717,20 @@
       sb.from('kehadiran').select('murid_id,hadir,sebab').eq('kelas_id', k.id).eq('tarikh', t),
       sb.rpc('ringkasan_kehadiran', { p_kelas: k.id, p_had: 30 })
     ]);
-    if (res[0].error) throw res[0].error;
-    if (res[1].error) throw res[1].error;
+    var luar = !!(res[0].error && rangkaianGagal(res[0].error));
+    if (res[0].error && !luar) throw res[0].error;
     if (location.hash.indexOf('#/modul/attendx/' + k.id) !== 0) return;
-    var rows = {};
-    (res[0].data || []).forEach(function (r) { rows[r.murid_id] = { hadir: r.hadir, sebab: r.sebab }; });
-    S.ax = { kelasId: k.id, tarikh: t, rows: rows, ada: (res[0].data || []).length > 0, sejarah: res[1].data || [] };
+    var cKey = 'et_cache_ax_' + uid() + '_' + k.id, rows = {}, tahu = !luar;
+    if (!luar) {
+      (res[0].data || []).forEach(function (r) { rows[r.murid_id] = { hadir: r.hadir, sebab: r.sebab }; });
+      simpanLS(cKey, { tarikh: t, rows: rows });
+    } else {
+      var c = bacaLS(cKey, null);
+      if (c && c.tarikh === t) { rows = c.rows || {}; tahu = true; }
+    }
+    rekodLuar('kehadiran', function (r) { return r.kelas_id === k.id && r.tarikh === t; }).forEach(function (r) { rows[r.murid_id] = { hadir: r.hadir, sebab: r.sebab }; });
+    var ada = Object.keys(rows).length > 0;
+    S.ax = { kelasId: k.id, tarikh: t, rows: rows, ada: ada, sejarah: res[1].error ? ((S.ax && S.ax.kelasId === k.id && S.ax.sejarah) || []) : (res[1].data || []), luar: luar, tahu: tahu || ada };
     lukisAttendX();
   }
 
@@ -592,6 +741,8 @@
     var lepas = tambahHari(ax.tarikh, -1), depan = tambahHari(ax.tarikh, 1);
     $app.innerHTML = '<div class="page">' +
       '<div class="row"><a class="icon-btn" href="#/kelas/' + k.id + '" aria-label="Kembali">' + I.back + '</a><div class="row" style="gap:10px">' + logo('attendx', 40) + '<div><h2>AttendX</h2><span class="sub">' + esc(k.nama + (k.subjek ? ' · ' + k.subjek : '')) + '</span></div></div></div>' +
+      '<div data-outbox>' + htmlOutbox() + '</div>' +
+      (ax.luar ? '<div class="card luar-nota">' + (ax.tahu ? 'Tiada internet. Rekod disimpan dalam telefon dan dihantar automatik bila ada isyarat.' : '<b>Tiada internet</b> dan rekod tarikh ini belum pernah dibuka di telefon ini. Jika kehadiran hari ini sudah direkod sebelum ini (di telefon lain), tunggu ada internet supaya rekod itu tidak tertindih.') + '</div>' : '') +
 
       '<div class="card between" style="padding:8px">' +
         '<a class="icon-sm" href="#/modul/attendx/' + k.id + '/' + lepas + '" aria-label="Hari sebelumnya">' + I.back + '</a>' +
@@ -602,7 +753,9 @@
       '<div class="card between" style="padding:14px 16px">' +
         '<div class="row" style="align-items:baseline;gap:6px"><span style="font-size:30px;font-weight:800;color:var(--acc)" data-ax-hadir>' + (ax.ada ? murid.length - tak : '–') + '</span><span class="sub">/ ' + murid.length + ' hadir</span></div>' +
         (ax.ada
-          ? '<span class="chip" style="background:var(--tint-now);color:var(--ok)" data-ax-status>' + I.check + ' Disimpan</span>'
+          ? (rekodLuar('kehadiran', function (r) { return r.kelas_id === ax.kelasId && r.tarikh === ax.tarikh; }).length
+            ? '<span class="chip" style="background:#FEF3C7;color:#92400E" data-ax-status>⏳ Dalam telefon</span>'
+            : '<span class="chip" style="background:var(--tint-now);color:var(--ok)" data-ax-status>' + I.check + ' Disimpan</span>')
           : '<span class="chip" style="background:#FEF3C7;color:#92400E" data-ax-status>Belum direkod</span>') +
       '</div>' +
 
@@ -637,6 +790,8 @@
     var tak = murid.filter(function (m) { return ax.rows[m.id] && ax.rows[m.id].hadir === false; }).length;
     var g = $app.querySelector('[data-ax-grid]'); if (g) g.innerHTML = gridAttendX(murid);
     var h = $app.querySelector('[data-ax-hadir]'); if (h) h.textContent = ax.ada ? String(murid.length - tak) : '–';
+    var stc = $app.querySelector('[data-ax-status]');
+    if (stc && ax.ada) { var dlm = rekodLuar('kehadiran', function (r) { return r.kelas_id === ax.kelasId && r.tarikh === ax.tarikh; }).length; stc.outerHTML = dlm ? '<span class="chip" style="background:#FEF3C7;color:#92400E" data-ax-status>⏳ Dalam telefon</span>' : '<span class="chip" style="background:var(--tint-now);color:var(--ok)" data-ax-status>' + I.check + ' Disimpan</span>'; }
   }
 
   /* Simpan satu murid. Jika hari ini belum direkod, cipta rekod untuk SEMUA murid sekali gus. */
@@ -656,23 +811,25 @@
       ax.rows[muridId] = { hadir: hadir, sebab: payload[0].sebab };
     }
     segarAttendX();
-    var r = await sb.from('kehadiran').upsert(payload, { onConflict: 'kelas_id,murid_id,tarikh' });
+    var r = await simpanRekod('kehadiran', payload);
     if (r.error) {
       ax.rows = sebelum; ax.ada = adaSebelum; segarAttendX();
       toast('Tidak disimpan: ' + errMsg(r.error));
       return;
     }
-    if (!adaSebelum) { ax.ada = true; await muatSejarah(); }
+    maklumLuarTalian(r);
+    if (!adaSebelum) { ax.ada = true; if (r.luar) lukisAttendX(); else await muatSejarah(); }
     else kemasSejarahSetempat();
   }
 
   async function simpanSemuaHadir() {
     var ax = S.ax, k = cariKelas(ax.kelasId);
     var payload = muridKelas(k.id).map(function (m) { return { kelas_id: k.id, murid_id: m.id, tarikh: ax.tarikh, hadir: true, sebab: null }; });
-    var r = await sb.from('kehadiran').upsert(payload, { onConflict: 'kelas_id,murid_id,tarikh' });
+    var r = await simpanRekod('kehadiran', payload);
     if (r.error) { toast('Tidak disimpan: ' + errMsg(r.error)); return; }
     payload.forEach(function (p) { ax.rows[p.murid_id] = { hadir: true, sebab: null }; });
     ax.ada = true;
+    if (r.luar) { lukisAttendX(); maklumLuarTalian(r); return; }
     await muatSejarah();
     toast('Semua hadir. Tekan nama murid yang tidak hadir.');
   }
@@ -776,10 +933,14 @@
     if (!k) return go('#/');
     $app.innerHTML = '<div class="page">' + kepalaModul(k, 'tasktrack', 'TaskTrack') + '<p class="sub">Memuatkan…</p></div>';
     var r = await sb.rpc('ringkasan_tugasan', { p_kelas: k.id, p_had: 100 });
-    if (r.error) throw r.error;
+    var luar = !!(r.error && rangkaianGagal(r.error)), cKey = 'et_cache_ttl_' + uid() + '_' + k.id;
+    if (r.error && !luar) throw r.error;
     if (location.hash !== '#/modul/tasktrack/' + k.id) return;
-    var bil = muridKelas(k.id).length, list = r.data || [];
+    var bil = muridKelas(k.id).length, list = luar ? bacaLS(cKey, []) : (r.data || []);
+    if (!luar) simpanLS(cKey, list.slice(0, 30));
     $app.innerHTML = '<div class="page">' + kepalaModul(k, 'tasktrack', 'TaskTrack') +
+      '<div data-outbox>' + htmlOutbox() + '</div>' +
+      (luar ? '<div class="card luar-nota">Tiada internet. Senarai ini salinan terakhir dalam telefon; tugasan baharu perlu internet.</div>' : '') +
       '<button class="btn block" data-act="tt-baru" data-id="' + k.id + '">+ Tugasan baharu</button>' +
       (list.length ? '<div class="card list-card">' + list.map(function (t) {
         var info = t.ditanda ? t.siap + '/' + bil + ' siap' : 'Belum ditanda';
@@ -830,12 +991,20 @@
       sb.from('tugasan').select('id,tajuk,tarikh,kelas_id').eq('id', tugasanId).maybeSingle(),
       sb.from('status_tugasan').select('murid_id,siap').eq('tugasan_id', tugasanId)
     ]);
-    if (res[0].error) throw res[0].error;
-    if (res[1].error) throw res[1].error;
-    if (!res[0].data || res[0].data.kelas_id !== kelasId) return false;
-    var rows = {};
-    (res[1].data || []).forEach(function (x) { rows[x.murid_id] = x.siap; });
-    S.tt = { kelasId: kelasId, tugasan: res[0].data, rows: rows };
+    var e = res[0].error || res[1].error, cKey = 'et_cache_tt_' + uid() + '_' + tugasanId, tugasan, rows = {}, luar = false;
+    if (e) {
+      var c = rangkaianGagal(e) && bacaLS(cKey, null);
+      if (!c) throw e;
+      tugasan = c.tugasan; rows = c.rows || {}; luar = true;
+    } else {
+      if (!res[0].data || res[0].data.kelas_id !== kelasId) return false;
+      tugasan = res[0].data;
+      (res[1].data || []).forEach(function (x) { rows[x.murid_id] = x.siap; });
+      simpanLS(cKey, { tugasan: tugasan, rows: rows });
+    }
+    if (tugasan.kelas_id !== kelasId) return false;
+    rekodLuar('status_tugasan', function (r) { return r.tugasan_id === tugasanId; }).forEach(function (r) { rows[r.murid_id] = r.siap; });
+    S.tt = { kelasId: kelasId, tugasan: tugasan, rows: rows, luar: luar };
     return true;
   }
 
@@ -858,6 +1027,8 @@
   function lukisTugasan() {
     var tt = S.tt, k = cariKelas(tt.kelasId), c = kiraTT();
     $app.innerHTML = '<div class="page">' + kepalaModul(k, 'tasktrack', 'TaskTrack', '#/modul/tasktrack/' + k.id) +
+      '<div data-outbox>' + htmlOutbox() + '</div>' +
+      (tt.luar ? '<div class="card luar-nota">Tiada internet. Tanda disimpan dalam telefon dan dihantar automatik bila ada isyarat.</div>' : '') +
       '<div class="card between" style="padding:12px 14px;gap:8px"><div class="grow" style="min-width:0"><b style="display:block;font-size:16px">' + esc(tt.tugasan.tajuk) + '</b><span class="sub">' + esc(labelTarikh(tt.tugasan.tarikh, true)) + '</span></div>' +
         '<button class="icon-sm" data-act="tt-ubah" aria-label="Ubah tajuk">' + I.edit + '</button><button class="icon-sm" data-act="tt-padam" aria-label="Padam tugasan" style="color:var(--danger)">' + I.trash + '</button></div>' +
       '<div class="card between" style="padding:14px 16px">' +
@@ -889,10 +1060,12 @@
     var tt = S.tt, sebelum = Object.assign({}, tt.rows);
     pasangan.forEach(function (p) { tt.rows[p[0]] = p[1]; });
     lukisTugasan();
-    var r = await sb.from('status_tugasan').upsert(pasangan.map(function (p) {
+    var r = await simpanRekod('status_tugasan', pasangan.map(function (p) {
       return { tugasan_id: tt.tugasan.id, murid_id: p[0], siap: p[1] };
-    }), { onConflict: 'tugasan_id,murid_id' });
+    }));
     if (r.error) { tt.rows = sebelum; lukisTugasan(); toast('Tidak disimpan: ' + errMsg(r.error)); return false; }
+    maklumLuarTalian(r);
+    if (r.luar) lukisTugasan();
     return true;
   }
 
@@ -940,6 +1113,7 @@
       '<div class="kutip-bawah">' +
         '<div class="kutip-kira"><b data-kutip-n>0</b><span>/ ' + murid.length + ' buku</span></div>' +
         '<div class="kutip-nama" data-kutip-msg>Halakan kamera ke QR buku. Scan terus satu demi satu.</div>' +
+        '<div class="kutip-luar" data-kutip-luar></div>' +
         '<button class="btn block" data-act="kutip-selesai">Selesai</button>' +
       '</div>' +
     '</div>';
@@ -966,8 +1140,9 @@
       bip(true); if (navigator.vibrate) navigator.vibrate(40);
       tunjuk('✓ ' + m.nama, 'ok'); kira();
       if (lama === true) return; // sudah siap dari awal
-      sb.from('status_tugasan').upsert({ tugasan_id: tt.tugasan.id, murid_id: m.id, siap: true }, { onConflict: 'tugasan_id,murid_id' }).then(function (r) {
+      simpanRekod('status_tugasan', [{ tugasan_id: tt.tugasan.id, murid_id: m.id, siap: true }]).then(function (r) {
         if (r.error) { tt.rows[m.id] = lama; delete sudah[m.id]; kira(); tunjuk('Tidak disimpan (' + m.nama + '): ' + errMsg(r.error), 'err'); }
+        else if (r.luar) { var ob = $app.querySelector('[data-kutip-luar]'); if (ob) ob.textContent = 'Tiada internet: ' + kiraOutbox().tunggu + ' rekod disimpan dalam telefon'; }
       });
     }, { returnDetailedScanResult: true, preferredCamera: 'environment', maxScansPerSecond: 15, highlightScanRegion: false });
     S.scanner = sc;
@@ -980,7 +1155,8 @@
     var baki = murid.filter(function (m) { return tt.rows[m.id] === undefined; });
     hentiScanner();
     if (baki.length) {
-      var r = await sb.from('status_tugasan').upsert(baki.map(function (m) { return { tugasan_id: tt.tugasan.id, murid_id: m.id, siap: false }; }), { onConflict: 'tugasan_id,murid_id' });
+      var r = await simpanRekod('status_tugasan', baki.map(function (m) { return { tugasan_id: tt.tugasan.id, murid_id: m.id, siap: false }; }));
+      maklumLuarTalian(r);
       if (r.error) { toast('Tidak disimpan: ' + errMsg(r.error)); return go('#/modul/tasktrack/' + tt.kelasId + '/' + tt.tugasan.id); }
       baki.forEach(function (m) { tt.rows[m.id] = false; });
     }
@@ -2134,7 +2310,11 @@
     'auth-tab': function (el) { S.authTab = el.dataset.tab; renderAuth(); },
     'ke-masuk': function () { S.authTab = 'masuk'; renderAuth(); },
     'lupa': function () { lupaLaluan(); },
-    'keluar': async function () { await sb.auth.signOut(); S.profil = null; S.loaded = false; S.kelas = []; S.murid = []; location.hash = '#/'; renderAuth(); },
+    'keluar': async function () {
+      var c = kiraOutbox();
+      if ((c.tunggu || c.gagal) && !confirm((c.tunggu + c.gagal) + ' rekod belum dihantar dan akan HILANG jika anda log keluar sekarang.\nTekan Batal, sambung ke internet, dan tunggu rekod dihantar dahulu.\n\nLog keluar juga?')) return;
+      padamCacheTelefon();
+      await sb.auth.signOut(); S.profil = null; S.loaded = false; S.kelas = []; S.murid = []; location.hash = '#/'; renderAuth(); },
     'semak-status': async function () { await ensureProfil(true); route(); },
     'mod': function () { pref.set('mod', isMod('dark') ? 'light' : 'dark'); applyTheme(); route(); },
     'tema': function () { sheetTema(); },
@@ -2168,6 +2348,9 @@
     'had-asal': function (el) { var f = el.closest('form'); Object.keys(HAD_ASAL).forEach(function (k) { f[k].value = HAD_ASAL[k]; }); },
     'an-laporan': function () { sheetLaporan(); },
     'eksport-csv': function (el) { eksportCsv(el); },
+    'outbox': function () { sheetOutbox(); },
+    'outbox-hantar': async function () { closeSheet(); await hantarOutbox(true); },
+    'outbox-buang': function () { if (!confirm('Buang rekod yang ditolak? Ia tidak boleh dikembalikan.')) return; tulisOutbox(bacaOutbox().filter(function (x) { return !x.gagal; })); closeSheet(); kemasPetunjukOutbox(); toast('Rekod yang ditolak dibuang.'); },
     'gred': function () { sheetGred(); },
     'gred-kosong': function (el) { simpanGred(el.closest('form'), true); },
     'kongsi-murid': function (el) { pilihKelasKongsi(el.dataset.id); },

@@ -312,3 +312,14 @@ textarea.input { min-height: 160px; resize: vertical; line-height: 1.5; }
 .lap-ulasan:focus { border-color: #0F766E; background: #F0FDFA; }
 .lap-isi { background: #FFFFFF; }
 @media print { .lap-ulasan { border: none; padding: 0; } }
+
+/* ===== Rekod tanpa internet ===== */
+.outbox-bar { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; border: 1.5px solid #F59E0B; background: #FFFBEB; color: #92400E; border-radius: 14px; padding: 10px 14px; min-height: 48px; font-size: 14px; font-weight: 700; text-align: left; }
+.outbox-bar b { background: #F59E0B; color: #fff; border-radius: 10px; padding: 6px 12px; flex-shrink: 0; }
+.outbox-bar.gagal { border-color: #DC2626; background: #FEF2F2; color: #991B1B; }
+.outbox-bar.gagal b { background: #DC2626; }
+[data-mode="dark"] .outbox-bar { background: #422006; color: #FDE68A; }
+[data-mode="dark"] .outbox-bar.gagal { background: #450A0A; color: #FECACA; }
+.luar-nota { padding: 12px 14px; font-size: 13px; line-height: 1.5; border-left: 4px solid #F59E0B; }
+.kutip-luar { font-size: 13px; color: #FDE68A; min-height: 0; text-align: center; }
+button.saved { border: none; font: inherit; cursor: pointer; }
