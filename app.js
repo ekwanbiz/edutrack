@@ -11,6 +11,9 @@
   var $sheet = document.getElementById('sheet-root');
   var $toast = document.getElementById('toast');
 
+  /* Nombor versi app. Naikkan SERENTAK dengan version.json dan CACHE dalam sw.js. */
+  var VERSI = '9';
+
   var S = { session: null, profil: null, kelas: [], murid: [], loaded: false, q: '', authTab: 'masuk', recovery: false, scanner: null };
 
   /* ---------- Simpanan pilihan (tema, mod) ---------- */
@@ -105,7 +108,45 @@
   }
   function namaPendek(n) { return String(n || '').split(/\s+/).slice(0, 2).join(' '); }
 
+  /* Pelayar mini dalam WhatsApp/Telegram/Facebook/Instagram sering menyekat kamera. */
+  function pelayarMini() {
+    var ua = navigator.userAgent || '';
+    var nama = /FBAN|FBAV|FB_IAB|FBIOS/.test(ua) ? 'Facebook' : /Instagram/.test(ua) ? 'Instagram' : /WhatsApp/i.test(ua) ? 'WhatsApp' : /Telegram/i.test(ua) ? 'Telegram' : /Line\//.test(ua) ? 'LINE' : /TikTok|musical_ly|Bytedance/i.test(ua) ? 'TikTok' : /Twitter/i.test(ua) ? 'X' : '';
+    if (nama) return nama;
+    if (/Android/.test(ua) && /; wv\)/.test(ua)) return 'aplikasi lain';
+    if (/iPhone|iPad|iPod/.test(ua) && !/Safari\//.test(ua) && !navigator.standalone && !window.matchMedia('(display-mode: standalone)').matches) return 'aplikasi lain';
+    return '';
+  }
+  function iPhone() { return /iPhone|iPad|iPod/.test(navigator.userAgent || ''); }
+  function mesejKamera(e) {
+    var m = String(e && (e.name || e.message || e)), mini = pelayarMini(), pelayar = iPhone() ? 'Safari' : 'Chrome';
+    var bukaLuar = 'Tekan ⋮ atau ⋯ di penjuru atas, kemudian pilih "Buka dalam ' + pelayar + '". Atau tekan Salin pautan dan tampal dalam ' + pelayar + '.';
+    if (mini) return { teks: 'EduTrack sedang dibuka dalam ' + mini + ', yang menyekat kamera. ' + bukaLuar, salin: true };
+    if (/NotAllowed|Permission|denied/i.test(m)) return { teks: iPhone()
+      ? 'Kebenaran kamera ditolak. Buka Tetapan → Safari → Kamera → pilih Tanya atau Benarkan, kemudian cuba lagi.'
+      : 'Kebenaran kamera ditolak. Tekan ikon di sebelah kiri alamat laman → Kebenaran → Kamera → Benarkan, kemudian cuba lagi.' };
+    if (/NotReadable|TrackStart|Could not start/i.test(m)) return { teks: 'Kamera sedang digunakan oleh aplikasi lain (contohnya panggilan video). Tutup aplikasi itu, kemudian cuba lagi.' };
+    if (/NotFound|no camera|Camera not found|DevicesNotFound/i.test(m)) return { teks: /Android|iPhone|iPad/.test(navigator.userAgent || '')
+      ? 'Kamera tidak dijumpai. Tutup aplikasi lain yang menggunakan kamera, atau buka EduTrack dalam ' + pelayar + ', kemudian cuba lagi.'
+      : 'Peranti ini tiada kamera. Gunakan telefon untuk scan QR.' };
+    if (!navigator.mediaDevices || /secure|insecure|not supported|NotSupported/i.test(m)) return { teks: 'Pelayar ini tidak membenarkan kamera. Buka EduTrack dalam ' + pelayar + '.', salin: true };
+    return { teks: 'Kamera tidak dapat dibuka (' + m + '). Cuba tutup dan buka semula app.' };
+  }
+  function tunjukRalatKamera(el, e, kelas) {
+    var r = mesejKamera(e);
+    el.className = kelas + ' err';
+    el.innerHTML = esc(r.teks) + (r.salin ? '<br><button class="btn secondary" style="margin-top:10px;min-height:40px" data-act="salin-pautan">Salin pautan</button>' : '');
+  }
+
+  /* Skrin tidak malap semasa kamera dibuka (jika telefon menyokong). */
+  function kunciSkrin() {
+    if (!('wakeLock' in navigator)) return;
+    navigator.wakeLock.request('screen').then(function (l) { S.wake = l; }).catch(function () { /* tidak disokong: abaikan */ });
+  }
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible' && S.scanner && !S.wake) kunciSkrin(); });
+
   function hentiScanner() {
+    if (S.wake) { try { S.wake.release(); } catch (e) { /* abaikan */ } S.wake = null; }
     if (S.scanner) { try { S.scanner.stop(); S.scanner.destroy(); } catch (e) { /* abaikan */ } S.scanner = null; }
   }
 
@@ -144,6 +185,8 @@
     check: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>',
     close: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
     edit: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>',
+    download: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>',
+    share: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>',
     print: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M7 14h10v7H7z"/></svg>',
     gear: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
     trash: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
@@ -928,11 +971,8 @@
       });
     }, { returnDetailedScanResult: true, preferredCamera: 'environment', maxScansPerSecond: 15, highlightScanRegion: false });
     S.scanner = sc;
-    sc.start().catch(function (e) {
-      var m = String(e && (e.name || e.message || e));
-      if (/NotAllowed|Permission|denied/i.test(m)) tunjuk('Kebenaran kamera ditolak. Benarkan kamera untuk laman ini dalam tetapan pelayar.', 'err');
-      else tunjuk('Kamera tidak dapat dibuka: ' + m, 'err');
-    });
+    if (!navigator.mediaDevices) { tunjukRalatKamera(msg, 'NotSupported', 'kutip-nama'); return; }
+    sc.start().then(kunciSkrin).catch(function (e) { tunjukRalatKamera(msg, e, 'kutip-nama'); });
   }
 
   async function selesaiKutip() {
@@ -1516,8 +1556,11 @@
         var w = warna(k.warna);
         return '<a class="list-item" href="#/urus/kelas/' + k.id + '"><span class="kelas-av" style="width:40px;height:40px;border-radius:13px;font-size:14px;background:' + w.g + ';--dot:' + w.dot + '"><span>' + esc(kodKelas(k.nama)) + '</span></span><span class="grow"><b style="display:block">' + esc(k.nama) + '</b><span class="sub">' + esc((k.subjek ? k.subjek + ' · ' : '') + bilMurid(k.id) + ' murid') + '</span></span><span class="muted">' + I.chev + '</span></a>';
       }).join('') + '</div>' : '<p class="sub">Belum ada kelas.</p>') +
+      '<span class="section-title">Data saya</span>' +
+      '<div class="card stack" style="padding:16px;gap:10px"><b>Muat turun semua data</b><span class="sub">Satu fail CSV (boleh dibuka dengan Excel atau Google Sheets) mengandungi semua murid, kehadiran, kerja rumah, TP dan markah anda. Simpan sebagai salinan pendua, contohnya sebulan sekali.</span><button class="btn secondary" data-act="eksport-csv">' + I.download + ' Muat turun CSV</button></div>' +
       (admin ? '<span class="section-title">Admin</span><div class="card stack" style="padding:16px;gap:12px" data-admin-kod><span class="sub">Memuatkan kod…</span></div><div class="card list-card" data-admin-guru><div class="list-item sub">Memuatkan senarai guru…</div></div>' : '') +
     '</div>';
+    $app.querySelector('.page').insertAdjacentHTML('beforeend', '<p class="sub" style="text-align:center;margin:8px 0 0">EduTrack versi ' + VERSI + '</p>');
     if (admin) { muatKod(); muatGuru(); }
   }
 
@@ -1735,12 +1778,8 @@
     function tunjuk(t, err) { msg.textContent = t; msg.className = 'scan-msg' + (err ? ' err' : ''); }
     function lepas() { setTimeout(function () { sibuk = false; tunjuk('Halakan kamera ke sticker QR pada buku'); }, 1800); }
     S.scanner = sc;
-    sc.start().catch(function (e) {
-      var m = String(e && (e.name || e.message || e));
-      if (/NotAllowed|Permission|denied/i.test(m)) tunjuk('Kebenaran kamera ditolak. Benarkan kamera untuk laman ini dalam tetapan pelayar, kemudian cuba lagi.', true);
-      else if (/NotFound|no camera|Camera not found/i.test(m)) tunjuk('Tiada kamera dijumpai pada peranti ini.', true);
-      else tunjuk('Kamera tidak dapat dibuka: ' + m, true);
-    });
+    if (!navigator.mediaDevices) { tunjukRalatKamera(msg, 'NotSupported', 'scan-msg'); return; }
+    sc.start().then(kunciSkrin).catch(function (e) { sibuk = true; tunjukRalatKamera(msg, e, 'scan-msg'); });
   }
 
   async function cariToken(t) {
@@ -1904,6 +1943,10 @@
     'an-had': function () { sheetHad(); },
     'had-asal': function (el) { var f = el.closest('form'); Object.keys(HAD_ASAL).forEach(function (k) { f[k].value = HAD_ASAL[k]; }); },
     'an-laporan': function () { sheetLaporan(); },
+    'eksport-csv': function (el) { eksportCsv(el); },
+    'kongsi-csv': function () { var f = S.failCsv; if (!f) return; navigator.share({ files: [f], title: f.name }).then(closeSheet).catch(function (e) { if (!/Abort/i.test(String(e && e.name))) { muatTurun(f); closeSheet(); } }); },
+    'muat-csv': function () { if (S.failCsv) muatTurun(S.failCsv); closeSheet(); },
+    'salin-pautan': function () { var u = location.href; (navigator.clipboard ? navigator.clipboard.writeText(u) : Promise.reject()).then(function () { toast('Pautan disalin. Tampal dalam pelayar.'); }).catch(function () { window.prompt('Salin pautan ini:', u); }); },
     'as-tab': function (el) { location.replace('#/modul/assessment/' + el.dataset.id + '/' + el.dataset.tab); },
     'pbd-tulis': function (el) { sheetTulisBab(el.dataset.id); },
     'pbd-ubah': function () { sheetUbahBab(); },
@@ -2048,6 +2091,82 @@
   window.addEventListener('online', kemasSaved);
   window.addEventListener('offline', kemasSaved);
 
+  /* ---------- Muat turun semua data (CSV) ---------- */
+  async function ambilSemua(table, cols, susun) {
+    var semua = [], dari = 0, SAIZ = 1000;
+    for (;;) {
+      var q = sb.from(table).select(cols);
+      susun.forEach(function (c) { q = q.order(c); });
+      var r = await q.range(dari, dari + SAIZ - 1);
+      if (r.error) throw r.error;
+      semua = semua.concat(r.data || []);
+      if (!r.data || r.data.length < SAIZ) return semua;
+      dari += SAIZ;
+    }
+  }
+  function sel(v) { v = v == null ? '' : String(v); return /[",\r\n;]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+  function tarikhDMY(iso) { return iso ? iso.split('-').reverse().join('/') : ''; }
+
+  async function eksportCsv(btn) {
+    btn.disabled = true; var asal = btn.innerHTML; btn.textContent = 'Menyediakan…';
+    try {
+      var res = await Promise.all([
+        ambilSemua('kehadiran', 'kelas_id,murid_id,tarikh,hadir,sebab', ['tarikh', 'kelas_id', 'murid_id']),
+        ambilSemua('status_tugasan', 'tugasan_id,murid_id,siap,tugasan(kelas_id,tajuk,tarikh)', ['tugasan_id', 'murid_id']),
+        ambilSemua('pbd_tp', 'item_id,kelas_id,murid_id,tp,pbd_item(tajuk,urutan)', ['item_id', 'murid_id']),
+        ambilSemua('markah', 'penilaian_id,murid_id,markah,penilaian(kelas_id,jenis,tajuk,tarikh,markah_penuh)', ['penilaian_id', 'murid_id'])
+      ]);
+      var kelas = {}; S.kelas.forEach(function (k) { kelas[k.id] = k; });
+      var murid = {}, no = {};
+      S.murid.forEach(function (m) { murid[m.id] = m; (m.kelas_murid || []).forEach(function (x) { no[x.kelas_id + '|' + m.id] = x.no_giliran; }); });
+      var baris = [['Jenis', 'Kelas', 'Subjek', 'No', 'Nama murid', 'Tarikh', 'Perkara', 'Nilai', 'Catatan']];
+      function b(jenis, kelasId, muridId, tarikh, perkara, nilai, catatan) {
+        var k = kelas[kelasId] || {}, m = murid[muridId] || {};
+        baris.push([jenis, k.nama || '', k.subjek || '', no[kelasId + '|' + muridId] || '', m.nama || '(murid telah dibuang)', tarikhDMY(tarikh), perkara, nilai, catatan || '']);
+      }
+      S.kelas.forEach(function (k) { muridKelas(k.id).forEach(function (m) { b('Murid', k.id, m.id, '', 'Senarai murid', '', ''); }); });
+      res[0].forEach(function (r) { b('Kehadiran', r.kelas_id, r.murid_id, r.tarikh, 'Kehadiran', r.hadir ? 'Hadir' : 'Tidak hadir', r.sebab); });
+      res[1].forEach(function (r) { if (r.tugasan) b('Kerja rumah', r.tugasan.kelas_id, r.murid_id, r.tugasan.tarikh, r.tugasan.tajuk, r.siap ? 'Siap' : 'Tidak siap', ''); });
+      res[2].forEach(function (r) { if (r.pbd_item) b('PBD', r.kelas_id, r.murid_id, '', r.pbd_item.tajuk, 'TP' + r.tp, ''); });
+      res[3].forEach(function (r) { var p = r.penilaian; if (p) b(p.jenis === 'kuiz' ? 'Kuiz' : 'Peperiksaan', p.kelas_id, r.murid_id, p.tarikh, p.tajuk, nomb(r.markah) + '/' + nomb(p.markah_penuh), Math.round(r.markah / p.markah_penuh * 100) + '%'); });
+      var csv = '﻿' + baris.map(function (r) { return r.map(sel).join(','); }).join('\r\n');
+      var nama = 'EduTrack-data-' + hariIni() + '.csv';
+      var fail = new File([csv], nama, { type: 'text/csv' });
+      var mudahAlih = /Android|iPhone|iPad/.test(navigator.userAgent || '');
+      if (mudahAlih && navigator.canShare && navigator.canShare({ files: [fail] })) {
+        S.failCsv = fail;
+        openSheet('<h2>Fail sedia</h2><p class="sub" style="margin:0">' + (baris.length - 1) + ' baris data. Tekan Simpan, kemudian pilih <b>Simpan ke Fail</b>, <b>Google Drive</b> atau aplikasi lain.</p><button class="btn block" data-act="kongsi-csv">' + I.download + ' Simpan</button><button class="btn ghost block" data-act="muat-csv">Muat turun terus</button>', { label: 'Fail sedia' });
+      } else { muatTurun(fail); toast('Fail dimuat turun: ' + nama); }
+    } catch (e) { toast('Gagal: ' + errMsg(e)); }
+    btn.disabled = false; btn.innerHTML = asal;
+  }
+  function muatTurun(fail) {
+    var url = URL.createObjectURL(fail), a = document.createElement('a');
+    a.href = url; a.download = fail.name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+  }
+
+  /* ---------- Versi baharu ---------- */
+  var semakTerakhir = 0;
+  function semakVersi() {
+    if (Date.now() - semakTerakhir < 60000) return;
+    semakTerakhir = Date.now();
+    if (navigator.serviceWorker && navigator.serviceWorker.getRegistration) {
+      navigator.serviceWorker.getRegistration().then(function (r) { if (r) r.update().catch(function () {}); }).catch(function () {});
+    }
+    fetch('version.json?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) {
+      if (d && d.v && String(d.v) !== VERSI && !document.getElementById('versi-baru')) {
+        var el = document.createElement('div');
+        el.id = 'versi-baru';
+        el.setAttribute('role', 'status');
+        el.innerHTML = '<span>Versi baharu EduTrack tersedia.</span><button type="button">Muat semula</button>';
+        el.querySelector('button').onclick = function () { location.reload(); };
+        document.body.appendChild(el);
+      }
+    }).catch(function () { /* luar talian: abaikan */ });
+  }
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') semakVersi(); });
+
   /* ---------- Mula ---------- */
   async function init() {
     applyTheme();
@@ -2066,6 +2185,7 @@
     });
     window.addEventListener('hashchange', route);
     route();
+    semakVersi();
   }
 
   init();

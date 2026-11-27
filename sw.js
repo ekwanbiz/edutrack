@@ -1,5 +1,5 @@
 // Service worker EduTrack: simpan fail app supaya boleh dibuka tanpa internet.
-const CACHE = 'edutrack-v8';
+const CACHE = 'edutrack-v9'; // sama dengan VERSI dalam app.js dan version.json
 const FILES = [
   './',
   './index.html',
@@ -35,8 +35,9 @@ self.addEventListener('fetch', (e) => {
   // Data Supabase sentiasa terus ke rangkaian.
   if (url.origin !== self.location.origin) return;
   // Fail app: cuba rangkaian dahulu (dapat versi terbaru), guna simpanan jika luar talian.
+  // cache: 'no-cache' = sentiasa tanya pelayan sama ada fail berubah (jimat: jawapan "tiada perubahan" sangat kecil).
   e.respondWith(
-    fetch(req)
+    fetch(req.url, { cache: 'no-cache', credentials: 'same-origin' })
       .then((res) => {
         const copy = res.clone();
         caches.open(CACHE).then((c) => c.put(req, copy));

@@ -1,0 +1,27 @@
+# Penggera harian: "jenguk" pangkalan data Supabase supaya projek percuma tidak dijeda
+# semasa cuti sekolah (Supabase menjeda projek selepas kira-kira seminggu tanpa aktiviti).
+# Ia hanya memanggil fungsi semak_kod dengan kod palsu: tiada data dibaca atau diubah.
+name: Jaga Supabase
+
+on:
+  schedule:
+    - cron: '23 2 * * *'   # setiap hari 10:23 pagi waktu Malaysia
+  workflow_dispatch: {}     # boleh juga dijalankan sendiri dari tab Actions
+
+permissions:
+  contents: read
+
+jobs:
+  jenguk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Jenguk pangkalan data
+        run: |
+          URL=$(grep -o "https://[a-z0-9]*\.supabase\.co" config.js | head -1)
+          KEY=$(grep -o "sb_publishable_[A-Za-z0-9_-]*" config.js | head -1)
+          KOD=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$URL/rest/v1/rpc/semak_kod" \
+            -H "apikey: $KEY" -H "Content-Type: application/json" -d '{"kod":"JENGUK"}')
+          echo "Jawapan Supabase: $KOD"
+          test "$KOD" = "200"

@@ -298,3 +298,8 @@ textarea.input { min-height: 160px; resize: vertical; line-height: 1.5; }
 .lap-garis { border-bottom: 0.25mm solid #94A3B8; height: 8mm; }
 .lap-ttd { display: grid; grid-template-columns: 1fr 1fr; gap: 14mm; margin-top: 16mm; }
 .lap-ttd div { border-top: 0.25mm solid #0F172A; padding-top: 1.5mm; font-size: 8.5pt; color: #475569; }
+
+/* ===== Versi baharu ===== */
+#versi-baru { position: fixed; left: 12px; right: 12px; bottom: calc(14px + env(safe-area-inset-bottom)); z-index: 80; display: flex; align-items: center; gap: 10px; justify-content: space-between; background: #0F172A; color: #fff; border-radius: 16px; padding: 10px 10px 10px 16px; box-shadow: 0 8px 24px rgba(0,0,0,.25); font-size: 14px; font-weight: 600; max-width: 520px; margin: 0 auto; }
+#versi-baru button { border: none; background: var(--acc); color: #fff; font-weight: 800; border-radius: 12px; padding: 10px 14px; min-height: 44px; }
+.scan-msg .btn, .kutip-nama .btn { color: var(--text); }
