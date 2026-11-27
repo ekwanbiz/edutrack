@@ -11,7 +11,7 @@
   var $sheet = document.getElementById('sheet-root');
   var $toast = document.getElementById('toast');
 
-  var S = { session: null, profil: null, kelas: [], murid: [], loaded: false, q: '', authTab: 'masuk', recovery: false };
+  var S = { session: null, profil: null, kelas: [], murid: [], loaded: false, q: '', authTab: 'masuk', recovery: false, scanner: null };
 
   /* ---------- Simpanan pilihan (tema, mod) ---------- */
   var pref = {
@@ -63,6 +63,30 @@
   }
   function isMod(m) { return document.documentElement.dataset.mode === m; }
   function go(hash) { if (location.hash === hash) route(); else location.hash = hash; }
+
+  /* QR: pautan yang dicetak pada sticker. Hanya kod rawak, tiada nama murid. */
+  function qrUrl(token) { return location.origin + location.pathname + '#/m/' + token; }
+  function qrSvg(text) {
+    var q = window.qrcode(0, 'M');
+    q.addData(text);
+    q.make();
+    return q.createSvgTag({ scalable: true, margin: 0 });
+  }
+  function tokenBaru() {
+    var a = new Uint8Array(9);
+    window.crypto.getRandomValues(a);
+    return Array.prototype.map.call(a, function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+  }
+  function ambilToken(teks) {
+    var t = String(teks || '').trim();
+    var m = t.match(/#\/m\/([a-f0-9]{8,64})/i);
+    if (m) return m[1].toLowerCase();
+    if (/^[a-f0-9]{8,64}$/i.test(t)) return t.toLowerCase();
+    return null;
+  }
+  function hentiScanner() {
+    if (S.scanner) { try { S.scanner.stop(); S.scanner.destroy(); } catch (e) { /* abaikan */ } S.scanner = null; }
+  }
 
   var toastTimer = null;
   function toast(msg, undoFn) {
@@ -176,6 +200,7 @@
   /* ---------- Router ---------- */
   async function route() {
     closeSheet();
+    hentiScanner();
     try {
       if (S.recovery) return renderSetPassword();
       if (!S.session) return renderAuth();
@@ -189,6 +214,10 @@
       if (h[0] === 'urus' && h[1] === 'kelas' && h[2]) return renderUrusKelas(h[2]);
       if (h[0] === 'urus') return renderUrus();
       if (h[0] === 'modul' && h[1]) return renderModul(h[1], h[2]);
+      if (h[0] === 'cetak' && h[1]) return renderCetak(h[1]);
+      if (h[0] === 'scan') return renderScan();
+      if (h[0] === 'm' && h[1]) return bukaToken(h[1]);
+      if (h[0] === 'murid' && h[1]) return renderMurid(h[1]);
       return renderHome();
     } catch (e) {
       renderRalat(e);
@@ -310,7 +339,7 @@
     var ucapan = h < 12 ? 'Selamat pagi' : h < 14 ? 'Selamat tengah hari' : h < 19 ? 'Selamat petang' : 'Selamat malam';
     var hari = ['Ahad', 'Isnin', 'Selasa', 'Rabu', 'Khamis', 'Jumaat', 'Sabtu'][now.getDay()];
     var bulan = ['Januari', 'Februari', 'Mac', 'April', 'Mei', 'Jun', 'Julai', 'Ogos', 'September', 'Oktober', 'November', 'Disember'][now.getMonth()];
-    var nama = (S.profil.nama || '').split(/\s+/)[0] || '';
+    var nama = (S.profil.nama || '').replace(/^\s*(cikgu|cg\.?|teacher)\s+/i, '').split(/\s+/)[0] || '';
     $app.innerHTML = '<div class="page">' +
       headerUtama() +
       '<div><p class="sub" style="margin:0">' + hari + ', ' + now.getDate() + ' ' + bulan + '</p><h1>' + ucapan + (nama ? ', Cikgu ' + esc(nama) : '') + '</h1></div>' +
@@ -430,7 +459,7 @@
     var list = muridKelas(kelasId).filter(function (m) { return !q || m.nama.toLowerCase().indexOf(q.toLowerCase()) >= 0; });
     if (!list.length) return '<p class="sub" style="padding:12px 2px">' + (q ? 'Tiada murid sepadan.' : 'Belum ada murid. Tambah murid melalui Urus.') + '</p>';
     return list.map(function (m, i) {
-      return '<button class="list-row" data-act="profil-murid"><span style="width:24px;font-size:12px;font-weight:700;color:var(--muted)">' + (m.no || i + 1) + '</span><span class="murid-av" style="width:36px;height:36px;font-size:13px">' + esc(inisial(m.nama)) + '</span><span class="grow" style="font-size:15px;font-weight:600">' + esc(m.nama) + '</span><span class="muted">' + I.chev + '</span></button>';
+      return '<button class="list-row" data-act="profil-murid" data-id="' + m.id + '"><span style="width:24px;font-size:12px;font-weight:700;color:var(--muted)">' + (m.no || i + 1) + '</span><span class="murid-av" style="width:36px;height:36px;font-size:13px">' + esc(inisial(m.nama)) + '</span><span class="grow" style="font-size:15px;font-weight:600">' + esc(m.nama) + '</span><span class="muted">' + I.chev + '</span></button>';
     }).join('');
   }
 
@@ -525,7 +554,8 @@
         '<p class="sub" style="margin:0">Sesuai bila cikgu ajar kelas yang sama untuk subjek lain. Murid yang sama dikongsi, jadi profil mereka digabungkan.</p>' +
         '<button class="btn secondary" type="submit">Salin murid</button></form>' : '') +
 
-      '<span class="section-title">Senarai murid (' + murid.length + ')</span>' +
+      '<div class="between"><span class="section-title">Senarai murid (' + murid.length + ')</span>' +
+        (murid.length ? '<a class="btn ghost" href="#/cetak/' + k.id + '">Cetak sticker QR</a>' : '') + '</div>' +
       (murid.length ? '<div class="card list-card">' + murid.map(function (m, i) {
         return '<div class="list-item" data-murid-row="' + m.id + '"><span style="width:24px;font-size:12px;font-weight:700;color:var(--muted)">' + (m.no || i + 1) + '</span><span class="grow" style="font-weight:600">' + esc(m.nama) + '</span>' +
           '<button class="icon-sm" data-act="edit-murid" data-id="' + m.id + '" aria-label="Ubah nama ' + esc(m.nama) + '">' + I.edit + '</button>' +
@@ -601,6 +631,152 @@
     });
   }
 
+
+  /* ---------- Cetak sticker QR (A4, 3 x 8 = 24 label) ---------- */
+  function labelHalaman(k, list) {
+    var pages = [];
+    for (var i = 0; i < list.length; i += 24) pages.push(list.slice(i, i + 24));
+    return pages.map(function (p) {
+      return '<div class="label-page">' + p.map(function (m) {
+        return '<div class="label"><div class="qr">' + qrSvg(qrUrl(m.qr_token)) + '</div><div class="txt">' +
+          '<span class="n">' + esc(m.nama) + '</span><span class="k">' + esc(k.nama + (k.subjek ? ' · ' + k.subjek : '')) + '</span><span class="b">EduTrack</span></div></div>';
+      }).join('') + '</div>';
+    }).join('');
+  }
+
+  function renderCetak(kelasId) {
+    var k = cariKelas(kelasId);
+    if (!k) return go('#/urus');
+    var tok = {}; S.murid.forEach(function (m) { tok[m.id] = m.qr_token; });
+    var list = muridKelas(k.id).map(function (m) { return { nama: m.nama, qr_token: tok[m.id] }; });
+    var muka = Math.max(1, Math.ceil(list.length / 24));
+    $app.innerHTML = '<div class="page">' +
+      '<div class="row"><a class="icon-btn" href="#/urus/kelas/' + k.id + '" aria-label="Kembali">' + I.back + '</a><div><h2>Cetak sticker QR</h2><span class="sub">' + esc(k.nama + (k.subjek ? ' · ' + k.subjek : '')) + ' · ' + list.length + ' murid · ' + muka + ' helai A4</span></div></div>' +
+      '<div class="card stack" style="padding:16px;gap:8px">' +
+        '<b>Sebelum cetak</b>' +
+        '<ol class="sub" style="margin:0;padding-left:18px;line-height:1.7">' +
+          '<li>Masukkan kertas label A4 <b>24 keping (3 × 8, 70 × 37 mm)</b>.</li>' +
+          '<li>Dalam tetingkap cetak, pilih saiz <b>A4</b>, skala <b>100% / Actual size</b>, dan margin <b>None</b>.</li>' +
+          '<li>Cuba cetak 1 helai atas kertas biasa dahulu dan tindihkan pada kertas label untuk semak kedudukan.</li>' +
+        '</ol>' +
+      '</div>' +
+      '<div class="row"><button class="btn grow" data-act="cetak">Cetak</button><button class="btn secondary" data-act="garis-panduan" aria-pressed="false">Garis label</button></div>' +
+      '<div class="preview-wrap">' + labelHalaman(k, list) + '</div>' +
+    '</div>';
+    skalaPratonton();
+    S.cetakHtml = labelHalaman(k, list);
+  }
+
+  function skalaPratonton() {
+    var w = $app.querySelector('.preview-wrap');
+    if (!w) return;
+    var pages = w.querySelectorAll('.label-page');
+    pages.forEach(function (p) { p.style.zoom = ''; });
+    var px = pages.length ? pages[0].getBoundingClientRect().width : 794;
+    var sc = w.clientWidth / (px || 794);
+    pages.forEach(function (p, i) { p.style.zoom = sc; p.style.marginBottom = i < pages.length - 1 ? (8 / sc) + 'px' : '0'; });
+  }
+  window.addEventListener('resize', function () { if (/^#\/cetak\//.test(location.hash)) skalaPratonton(); });
+
+  function cetakSekarang() {
+    var root = document.getElementById('print-root');
+    root.innerHTML = S.cetakHtml || '';
+    setTimeout(function () { window.print(); }, 50);
+  }
+  window.addEventListener('afterprint', function () { var r = document.getElementById('print-root'); if (r) r.innerHTML = ''; });
+
+  /* ---------- Scan QR ---------- */
+  function renderScan() {
+    $app.innerHTML = '<div class="scan-page">' +
+      '<video playsinline muted></video>' +
+      '<div class="scan-top"><button class="scan-btn-round" data-act="back" aria-label="Tutup scan">' + I.close + '</button><b>Scan QR murid</b><span style="width:44px"></span></div>' +
+      '<div class="scan-frame" aria-hidden="true"></div>' +
+      '<div class="scan-msg" data-scan-msg>Halakan kamera ke sticker QR pada buku</div>' +
+    '</div>';
+    var video = $app.querySelector('video'), msg = $app.querySelector('[data-scan-msg]');
+    if (!window.QrScanner) { msg.textContent = 'Pembaca QR gagal dimuatkan. Muat semula app.'; msg.className = 'scan-msg err'; return; }
+    var sibuk = false;
+    var sc = new window.QrScanner(video, function (res) {
+      if (sibuk) return;
+      sibuk = true;
+      var t = ambilToken(res && res.data);
+      if (!t) { tunjuk('Ini bukan QR EduTrack.', true); return lepas(); }
+      cariToken(t).then(function (m) {
+        if (!m) { tunjuk('Murid ini tiada dalam senarai anda.', true); return lepas(); }
+        if (navigator.vibrate) navigator.vibrate(60);
+        hentiScanner();
+        go('#/murid/' + m.id);
+      }).catch(function (e) { tunjuk(errMsg(e), true); lepas(); });
+    }, { returnDetailedScanResult: true, preferredCamera: 'environment', maxScansPerSecond: 8 });
+    function tunjuk(t, err) { msg.textContent = t; msg.className = 'scan-msg' + (err ? ' err' : ''); }
+    function lepas() { setTimeout(function () { sibuk = false; tunjuk('Halakan kamera ke sticker QR pada buku'); }, 1800); }
+    S.scanner = sc;
+    sc.start().catch(function (e) {
+      var m = String(e && (e.name || e.message || e));
+      if (/NotAllowed|Permission|denied/i.test(m)) tunjuk('Kebenaran kamera ditolak. Benarkan kamera untuk laman ini dalam tetapan pelayar, kemudian cuba lagi.', true);
+      else if (/NotFound|no camera|Camera not found/i.test(m)) tunjuk('Tiada kamera dijumpai pada peranti ini.', true);
+      else tunjuk('Kamera tidak dapat dibuka: ' + m, true);
+    });
+  }
+
+  async function cariToken(t) {
+    var m = S.murid.filter(function (x) { return x.qr_token === t; })[0];
+    if (m) return m;
+    var r = await sb.from('murid').select('id').eq('qr_token', t).maybeSingle();
+    if (r.error) throw r.error;
+    if (r.data) await loadData(true);
+    return r.data;
+  }
+
+  async function bukaToken(t) {
+    var tok = ambilToken('#/m/' + t);
+    var m = tok ? await cariToken(tok) : null;
+    if (m) { location.replace('#/murid/' + m.id); return; }
+    $app.innerHTML = '<div class="page"><div class="empty" style="margin:auto"><h2>Murid tidak dijumpai</h2><p class="sub">QR ini bukan milik murid dalam senarai anda, atau kod QR telah ditukar.</p><a class="btn" href="#/">Ke halaman utama</a></div></div>';
+  }
+
+  /* ---------- Student Profile (asas) ---------- */
+  function renderMurid(id) {
+    var m = S.murid.filter(function (x) { return x.id === id; })[0];
+    if (!m) return go('#/');
+    var links = (m.kelas_murid || []).map(function (l) { return { k: cariKelas(l.kelas_id), no: l.no_giliran }; }).filter(function (x) { return x.k; });
+    var w = warna(links.length ? links[0].k.warna : 3);
+    $app.innerHTML = '<div class="page">' +
+      '<div class="row"><button class="icon-btn" data-act="back" aria-label="Kembali">' + I.back + '</button><div class="row" style="gap:10px">' + logo('profil', 40) + '<h2>Student Profile</h2></div></div>' +
+      '<div class="card profil-head">' +
+        '<span class="profil-av" style="background:' + w.g + '">' + esc(inisial(m.nama)) + '</span>' +
+        '<h1 style="font-size:22px">' + esc(m.nama) + '</h1>' +
+        '<div class="row" style="gap:6px;flex-wrap:wrap;justify-content:center">' + links.map(function (x) {
+          return '<a class="chip" style="background:var(--tint-now);color:var(--acc)" href="#/kelas/' + x.k.id + '">' + esc(x.k.nama + (x.k.subjek ? ' · ' + x.k.subjek : '')) + (x.no ? ' · No. ' + x.no : '') + '</a>';
+        }).join('') + '</div>' +
+      '</div>' +
+      '<span class="section-title">Rekod</span>' +
+      '<div class="card list-card">' +
+        ['attendx', 'tasktrack', 'assessment'].map(function (mid) {
+          var mm = MODUL.filter(function (x) { return x.id === mid; })[0];
+          return '<div class="list-item">' + logo(mid, 36) + '<span class="grow"><b style="display:block">' + mm.nama + '</b><span class="sub">Akan dipaparkan bila modul ini siap</span></span></div>';
+        }).join('') +
+      '</div>' +
+      '<span class="section-title">QR murid</span>' +
+      '<div class="card stack" style="padding:16px;align-items:center;gap:12px">' +
+        '<div class="qr-box" role="img" aria-label="Kod QR ' + esc(m.nama) + '">' + qrSvg(qrUrl(m.qr_token)) + '</div>' +
+        '<p class="sub" style="margin:0;text-align:center">QR ini hanya mengandungi kod rawak. Orang lain yang scan tidak akan nampak apa-apa.</p>' +
+        '<button class="btn danger block" data-act="jana-qr" data-id="' + m.id + '">Jana QR baharu (sticker hilang)</button>' +
+      '</div>' +
+    '</div>';
+  }
+
+  async function janaQrBaru(id) {
+    var m = S.murid.filter(function (x) { return x.id === id; })[0];
+    if (!m) return;
+    if (!window.confirm('Jana QR baharu untuk ' + m.nama + '? Sticker lama terus tidak boleh digunakan, dan sticker baharu perlu dicetak.')) return;
+    var r = await sb.from('murid').update({ qr_token: tokenBaru() }).eq('id', id);
+    if (r.error) { toast(errMsg(r.error)); return; }
+    await loadData(true);
+    toast('QR baharu dijana. Cetak semula sticker murid ini.');
+    renderMurid(id);
+  }
+
   /* ---------- Tindakan (klik) ---------- */
   var ACT = {
     'reload': function () { S.loaded = false; route(); },
@@ -628,10 +804,14 @@
       var r = await sb.from('kelas').update({ disemat: baru }).eq('id', k.id);
       if (r.error) { k.disemat = !baru; toast(errMsg(r.error)); if (list) list.innerHTML = homeList(); }
     },
-    'scan': function () { toast('Scan QR akan tersedia dalam kemas kini seterusnya.'); },
+    'scan': function () { go('#/scan'); },
+    'back': function () { if (history.length > 1) history.back(); else go('#/'); },
+    'cetak': function () { cetakSekarang(); },
+    'garis-panduan': function (el) { var w = $app.querySelector('.preview-wrap'); if (w) { w.classList.toggle('guides'); el.setAttribute('aria-pressed', String(w.classList.contains('guides'))); } },
+    'jana-qr': function (el) { janaQrBaru(el.dataset.id); },
     'alert': function () { toast('Akan aktif selepas modul AttendX dan TaskTrack siap.'); },
     'senarai-murid': function (el) { sheetMurid(el.dataset.id, !!el.dataset.cari); },
-    'profil-murid': function () { toast('Student Profile akan tersedia dalam kemas kini seterusnya.'); },
+    'profil-murid': function (el) { go('#/murid/' + el.dataset.id); },
     'edit-murid': function (el) { editMurid(el.dataset.id); },
     'buang-murid': function (el) { buangMurid(el.dataset.id, el.dataset.kelas); },
     'padam-kelas': async function (el) {

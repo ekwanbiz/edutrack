@@ -11,9 +11,10 @@ App pengurusan kelas untuk guru (PWA). Dibina dengan HTML, CSS dan JavaScript bi
 - **Admin**: lihat & tukar kod pendaftaran, lulus/tolak guru
 - Mod cerah/gelap dan 4 tema
 - Boleh dipasang di skrin utama telefon (PWA) dan dibuka tanpa internet
+- **Cetak sticker QR** (label A4 3 × 8), **Scan QR** dengan kamera, dan **Student Profile** asas
 
 ## Akan datang
-AttendX, TaskTrack, Assessment, Student Profile, Analisis, Scan QR dan Kutip Buku.
+AttendX, TaskTrack, Assessment, Analisis, rekod dalam Student Profile, dan Kutip Buku.
 
 ## Fail
 | Fail | Fungsi |
@@ -25,4 +26,6 @@ AttendX, TaskTrack, Assessment, Student Profile, Analisis, Scan QR dan Kutip Buk
 | `sw.js` | Service worker (luar talian) |
 | `manifest.webmanifest` | Tetapan PWA |
 | `vendor/supabase.js` | Pustaka Supabase (v2.119.2) |
+| `vendor/qrcode.js` | Penjana QR (qrcode-generator 2.0.4, MIT) |
+| `vendor/qr-scanner*.js` | Pembaca QR (qr-scanner 1.4.2, MIT) |
 | `icons/` | Logo dan ikon app |

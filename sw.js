@@ -1,5 +1,5 @@
 // Service worker EduTrack: simpan fail app supaya boleh dibuka tanpa internet.
-const CACHE = 'edutrack-v1';
+const CACHE = 'edutrack-v2';
 const FILES = [
   './',
   './index.html',
@@ -7,6 +7,9 @@ const FILES = [
   './app.js',
   './config.js',
   './vendor/supabase.js',
+  './vendor/qrcode.js',
+  './vendor/qr-scanner.umd.min.js',
+  './vendor/qr-scanner-worker.min.js',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
