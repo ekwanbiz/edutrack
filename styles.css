@@ -218,3 +218,18 @@ textarea.input { min-height: 160px; resize: vertical; line-height: 1.5; }
 .kutip-nama { min-height: 44px; text-align: center; font-size: 16px; font-weight: 700; padding: 0 8px; }
 .kutip-nama.ok { color: #86EFAC; }
 .kutip-nama.err { color: #FCA5A5; }
+
+/* ===== Assessment ===== */
+.tp-pilih { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+.tp-btn { border: 2px solid transparent; border-radius: 14px; min-height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 4px 2px; }
+.tp-btn b { font-size: 14px; font-weight: 800; }
+.tp-btn span { font-size: 11px; font-weight: 700; opacity: .8; }
+.tp-btn[aria-pressed="true"] { box-shadow: 0 4px 12px rgba(0,0,0,.18); transform: translateY(-1px); }
+.markah-row { gap: 8px; cursor: text; }
+.markah-in { width: 84px; min-height: 44px; text-align: center; font-weight: 700; padding: 8px; flex-shrink: 0; }
+.markah-in.ok { border-color: #16A34A; background: #F0FDF4; }
+.markah-in.salah { border-color: #DC2626; background: #FEF2F2; }
+[data-mode="dark"] .markah-in.ok { background: #052E16; }
+[data-mode="dark"] .markah-in.salah { background: #450A0A; }
+.markah-in::-webkit-outer-spin-button, .markah-in::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.markah-in { -moz-appearance: textfield; appearance: textfield; }

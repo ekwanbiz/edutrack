@@ -166,7 +166,7 @@
   var MODUL = [
     { id: 'attendx', nama: 'AttendX', desc: 'Rekod kehadiran', },
     { id: 'tasktrack', nama: 'TaskTrack', desc: 'Kerja rumah · kutip buku', },
-    { id: 'assessment', nama: 'Assessment', desc: 'PBD · kuiz · peperiksaan', rancang: ['PBD dengan butang TP1 hingga TP6', 'Markah kuiz dan peperiksaan dengan papan nombor besar', 'Auto ke murid seterusnya'] },
+    { id: 'assessment', nama: 'Assessment', desc: 'PBD · kuiz · peperiksaan', },
     { id: 'profil', nama: 'Student Profile', desc: 'Profil murid · QR' },
     { id: 'analisis', nama: 'Analisis', desc: 'Statistik · laporan', rancang: ['Ringkasan kehadiran, kerja rumah dan PBD kelas', 'Jana laporan PDF / Excel', 'Laporan individu murid'] },
     { id: 'urus', nama: 'Urus', desc: 'Murid · kelas · QR' }
@@ -238,6 +238,9 @@
       if (h[0] === 'modul' && h[1] === 'tasktrack' && h[2] && h[3]) return renderTugasan(h[2], h[3]);
       if (h[0] === 'modul' && h[1] === 'tasktrack' && h[2]) return renderTaskTrack(h[2]);
       if (h[0] === 'kutip' && h[1] && h[2]) return renderKutip(h[1], h[2]);
+      if (h[0] === 'modul' && h[1] === 'assessment' && h[2]) return renderAssessment(h[2], h[3]);
+      if (h[0] === 'pbd' && h[1] && h[2]) return renderPbdItem(h[1], h[2]);
+      if (h[0] === 'nilai' && h[1] && h[2]) return renderPenilaian(h[1], h[2]);
       if (h[0] === 'modul' && h[1]) return renderModul(h[1], h[2]);
       if (h[0] === 'cetak' && h[1]) return renderCetak(h[1]);
       if (h[0] === 'scan') return renderScan();
@@ -942,6 +945,253 @@
     go('#/modul/tasktrack/' + tt.kelasId + '/' + tt.tugasan.id);
   }
 
+  /* ---------- Assessment ---------- */
+  var TP_WARNA = { 1: ['#FEE2E2', '#B91C1C'], 2: ['#FFEDD5', '#C2410C'], 3: ['#FEF9C3', '#A16207'], 4: ['#ECFCCB', '#4D7C0F'], 5: ['#DCFCE7', '#15803D'], 6: ['#CCFBF1', '#0F766E'] };
+  var JENIS = { kuiz: 'Kuiz', peperiksaan: 'Peperiksaan' };
+  function subjekKunci(k) { return String((k && k.subjek) || '').trim().toLowerCase(); }
+  function nomb(n) { n = Number(n); return Math.round(n * 10) / 10 + ''; }
+
+  async function renderAssessment(kelasId, tab) {
+    var k = cariKelas(kelasId);
+    if (!k) return go('#/');
+    tab = ['pbd', 'kuiz', 'peperiksaan'].indexOf(tab) >= 0 ? tab : 'pbd';
+    var hash = location.hash;
+    var tabs = '<div class="seg">' + [['pbd', 'PBD'], ['kuiz', 'Kuiz'], ['peperiksaan', 'Peperiksaan']].map(function (t) {
+      return '<button data-act="as-tab" data-id="' + k.id + '" data-tab="' + t[0] + '" aria-pressed="' + (t[0] === tab) + '">' + t[1] + '</button>';
+    }).join('') + '</div>';
+    $app.innerHTML = '<div class="page">' + kepalaModul(k, 'assessment', 'Assessment') + tabs + '<p class="sub">Memuatkan…</p></div>';
+    var bil = muridKelas(k.id).length, body;
+    if (tab === 'pbd') {
+      var r = await sb.rpc('ringkasan_pbd', { p_kelas: k.id });
+      if (r.error) throw r.error;
+      var list = r.data || [];
+      body = '<button class="btn block" data-act="pbd-tulis" data-id="' + k.id + '">+ Tulis Bab</button>' +
+        '<p class="sub" style="margin:0">Senarai Bab ini untuk subjek <b>' + esc(k.subjek || '(tiada subjek)') + '</b> dan dikongsi dengan semua kelas ' + esc(k.subjek || 'tanpa subjek') + ' anda.</p>' +
+        (list.length ? '<div class="card list-card">' + list.map(function (it) {
+          return '<a class="list-item" href="#/pbd/' + k.id + '/' + it.id + '"><span class="grow"><b style="display:block;font-size:15px">' + esc(it.tajuk) + '</b><span class="sub">' + (it.ditanda ? it.ditanda + '/' + bil + ' ditanda · purata TP ' + nomb(it.purata) : 'Belum ditanda') + '</span></span><span class="muted">' + I.chev + '</span></a>';
+        }).join('') + '</div>' : '<div class="card empty"><p class="sub">Belum ada Bab. Tekan <b>+ Tulis Bab</b>. Boleh tampal banyak baris sekali gus.</p></div>');
+    } else {
+      var r2 = await sb.rpc('ringkasan_penilaian', { p_kelas: k.id, p_jenis: tab });
+      if (r2.error) throw r2.error;
+      var pl = r2.data || [];
+      body = '<button class="btn block" data-act="nilai-baru" data-id="' + k.id + '" data-jenis="' + tab + '">+ ' + JENIS[tab] + ' baharu</button>' +
+        (pl.length ? '<div class="card list-card">' + pl.map(function (p) {
+          var pct = p.dimasuk ? Math.round(p.purata / p.markah_penuh * 100) : 0;
+          return '<a class="list-item" href="#/nilai/' + k.id + '/' + p.id + '"><span class="grow"><b style="display:block;font-size:15px">' + esc(p.tajuk) + '</b><span class="sub">' + esc(labelTarikh(p.tarikh, true)) + ' · ' + (p.dimasuk ? p.dimasuk + '/' + bil + ' dimasuk · purata ' + nomb(p.purata) + '/' + nomb(p.markah_penuh) + ' (' + pct + '%)' : 'Belum ada markah · /' + nomb(p.markah_penuh)) + '</span></span><span class="muted">' + I.chev + '</span></a>';
+        }).join('') + '</div>' : '<div class="card empty"><p class="sub">Belum ada ' + JENIS[tab].toLowerCase() + '.</p></div>');
+    }
+    if (location.hash !== hash) return;
+    $app.innerHTML = '<div class="page">' + kepalaModul(k, 'assessment', 'Assessment') + tabs + body + '</div>';
+  }
+
+  function sheetTulisBab(kelasId) {
+    var k = cariKelas(kelasId);
+    openSheet('<h2>Tulis Bab · ' + esc(k.subjek || 'tiada subjek') + '</h2>' +
+      '<form class="stack" style="gap:14px" data-form="pbd-tulis" data-kelas="' + kelasId + '" novalidate>' +
+        '<label class="field"><span>Satu Bab setiap baris (boleh tampal dari DSKP / Word)</span><textarea class="input" name="senarai" placeholder="Bab 1 Nombor Bulat&#10;Bab 2 Pecahan&#10;Bab 3 Perpuluhan"></textarea></label>' +
+        '<p class="error" data-err></p><button class="btn block" type="submit">Simpan</button></form>',
+      { label: 'Tulis Bab', focus: 'textarea' });
+  }
+
+  async function simpanBab(form) {
+    var err = form.querySelector('[data-err]'), btn = form.querySelector('[type=submit]');
+    var k = cariKelas(form.dataset.kelas);
+    var baris = form.senarai.value.split(/\r?\n/).map(function (x) { return x.trim(); }).filter(Boolean);
+    if (!baris.length) { err.textContent = 'Tulis sekurang-kurangnya satu Bab.'; return; }
+    if (baris.some(function (x) { return x.length > 150; })) { err.textContent = 'Setiap Bab maksimum 150 aksara.'; return; }
+    btn.disabled = true;
+    var ada = await sb.rpc('ringkasan_pbd', { p_kelas: k.id });
+    var mula = ((ada.data || []).reduce(function (m, x) { return Math.max(m, x.urutan || 0); }, 0)) + 1;
+    var r = await sb.from('pbd_item').insert(baris.map(function (t, i) { return { subjek: subjekKunci(k), tajuk: t, urutan: mula + i }; }));
+    btn.disabled = false;
+    if (r.error) { err.textContent = errMsg(r.error); return; }
+    closeSheet(); toast(baris.length + ' Bab disimpan.'); route();
+  }
+
+  /* PBD: satu Bab */
+  async function renderPbdItem(kelasId, itemId) {
+    var k = cariKelas(kelasId);
+    if (!k) return go('#/');
+    var hash = location.hash;
+    $app.innerHTML = '<div class="page">' + kepalaModul(k, 'assessment', 'PBD', '#/modul/assessment/' + k.id + '/pbd') + '<p class="sub">Memuatkan…</p></div>';
+    var res = await Promise.all([
+      sb.from('pbd_item').select('id,tajuk,subjek').eq('id', itemId).maybeSingle(),
+      sb.from('pbd_tp').select('murid_id,tp').eq('item_id', itemId).eq('kelas_id', k.id)
+    ]);
+    if (res[0].error) throw res[0].error;
+    if (res[1].error) throw res[1].error;
+    if (location.hash !== hash) return;
+    if (!res[0].data || res[0].data.subjek !== subjekKunci(k)) { toast('Bab tidak dijumpai.'); return go('#/modul/assessment/' + k.id + '/pbd'); }
+    var rows = {};
+    (res[1].data || []).forEach(function (x) { rows[x.murid_id] = x.tp; });
+    S.pbd = { kelasId: k.id, item: res[0].data, rows: rows, pilih: (S.pbd && S.pbd.pilih) || 3 };
+    lukisPbd();
+  }
+
+  function lukisPbd() {
+    var p = S.pbd, k = cariKelas(p.kelasId), murid = muridKelas(k.id);
+    var kira = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 }, kosong = 0, jum = 0, n = 0;
+    murid.forEach(function (m) { var t = p.rows[m.id]; if (t) { kira[t]++; jum += t; n++; } else kosong++; });
+    $app.innerHTML = '<div class="page">' + kepalaModul(k, 'assessment', 'PBD', '#/modul/assessment/' + k.id + '/pbd') +
+      '<div class="card between" style="padding:12px 14px;gap:8px"><div class="grow" style="min-width:0"><b style="display:block;font-size:16px">' + esc(p.item.tajuk) + '</b><span class="sub">' + (n ? n + '/' + murid.length + ' ditanda · purata TP ' + nomb(jum / n) : 'Belum ditanda') + '</span></div>' +
+        '<button class="icon-sm" data-act="pbd-ubah" aria-label="Ubah tajuk Bab">' + I.edit + '</button><button class="icon-sm" data-act="pbd-padam" aria-label="Padam Bab" style="color:var(--danger)">' + I.trash + '</button></div>' +
+      '<div class="tp-pilih" role="group" aria-label="Pilih TP">' + [1, 2, 3, 4, 5, 6].map(function (t) {
+        var w = TP_WARNA[t], on = p.pilih === t;
+        return '<button class="tp-btn" data-act="tp-pilih" data-tp="' + t + '" aria-pressed="' + on + '" style="' + (on ? 'background:' + w[1] + ';color:#fff;border-color:' + w[1] : 'background:' + w[0] + ';color:' + w[1]) + '"><b>TP' + t + '</b><span>' + kira[t] + '</span></button>';
+      }).join('') + '</div>' +
+      (kosong && murid.length ? '<button class="btn block" data-act="tp-semua">' + I.check + ' Semua ' + (n ? 'baki ' : '') + '→ TP' + p.pilih + ' <span style="opacity:.8;font-weight:600">(' + kosong + ' murid)</span></button>' : '') +
+      (murid.length
+        ? '<p class="sub" style="margin:0">Pilih TP di atas, kemudian tekan nama murid. Tekan sekali lagi dengan TP yang sama untuk padam.</p>' +
+          '<div class="ax-grid">' + murid.map(function (m, i) {
+            var t = p.rows[m.id], w = t ? TP_WARNA[t] : null;
+            return '<button class="ax-kad" data-pbd-murid="' + m.id + '"' + (w ? ' style="background:' + w[0] + ';border-color:' + w[1] + ';color:' + w[1] + '"' : '') + ' aria-label="' + esc(m.nama) + (t ? ', TP' + t : ', belum ditanda') + '">' +
+              '<span class="ax-nama">' + (m.no || i + 1) + '. ' + esc(namaPendek(m.nama)) + '</span><span class="ax-st">' + (t ? 'TP' + t : '') + '</span></button>';
+          }).join('') + '</div>'
+        : '<div class="card empty"><p class="sub">Belum ada murid dalam kelas ini.</p></div>') +
+    '</div>';
+  }
+
+  async function simpanTp(pasangan) {
+    var p = S.pbd, sebelum = Object.assign({}, p.rows);
+    var buang = pasangan.filter(function (x) { return !x[1]; }).map(function (x) { return x[0]; });
+    var simpan = pasangan.filter(function (x) { return x[1]; });
+    pasangan.forEach(function (x) { if (x[1]) p.rows[x[0]] = x[1]; else delete p.rows[x[0]]; });
+    lukisPbd();
+    var r1 = simpan.length ? await sb.from('pbd_tp').upsert(simpan.map(function (x) { return { item_id: p.item.id, murid_id: x[0], kelas_id: p.kelasId, tp: x[1] }; }), { onConflict: 'item_id,murid_id' }) : { error: null };
+    var r2 = buang.length ? await sb.from('pbd_tp').delete().eq('item_id', p.item.id).in('murid_id', buang) : { error: null };
+    var e = r1.error || r2.error;
+    if (e) { p.rows = sebelum; lukisPbd(); toast('Tidak disimpan: ' + errMsg(e)); }
+  }
+
+  document.addEventListener('click', function (e) {
+    var el = e.target.closest('[data-pbd-murid]');
+    if (!el || !S.pbd) return;
+    var id = el.dataset.pbdMurid, kini = S.pbd.rows[id];
+    simpanTp([[id, kini === S.pbd.pilih ? null : S.pbd.pilih]]);
+  });
+
+  function sheetUbahBab() {
+    var it = S.pbd.item;
+    openSheet('<h2>Ubah tajuk Bab</h2><form class="stack" style="gap:14px" data-form="pbd-ubah" novalidate><label class="field"><span>Tajuk</span><input class="input" name="tajuk" maxlength="150" value="' + esc(it.tajuk) + '" required></label><p class="sub" style="margin:0">Perubahan ini berlaku untuk semua kelas ' + esc(cariKelas(S.pbd.kelasId).subjek || '') + ' anda.</p><p class="error" data-err></p><button class="btn block" type="submit">Simpan</button></form>', { label: 'Ubah tajuk Bab', focus: 'input[name=tajuk]' });
+  }
+  async function padamBab() {
+    var p = S.pbd, k = cariKelas(p.kelasId);
+    if (!confirm('Padam Bab "' + p.item.tajuk + '"?\nBab ini akan hilang daripada SEMUA kelas ' + (k.subjek || '') + ' anda, bersama semua TP murid untuk Bab ini. Tidak boleh dikembalikan.')) return;
+    var r = await sb.from('pbd_item').delete().eq('id', p.item.id);
+    if (r.error) { toast(errMsg(r.error)); return; }
+    toast('Bab dipadam.'); go('#/modul/assessment/' + k.id + '/pbd');
+  }
+
+  /* Kuiz / peperiksaan */
+  function sheetPenilaian(kelasId, jenis, p) {
+    openSheet('<h2>' + (p ? 'Ubah ' + JENIS[p.jenis].toLowerCase() : JENIS[jenis] + ' baharu') + '</h2>' +
+      '<form class="stack" style="gap:14px" data-form="penilaian" data-kelas="' + kelasId + '" data-jenis="' + (p ? p.jenis : jenis) + '"' + (p ? ' data-id="' + p.id + '"' : '') + ' novalidate>' +
+        '<label class="field"><span>Tajuk</span><input class="input" name="tajuk" maxlength="120" placeholder="' + (jenis === 'kuiz' || (p && p.jenis === 'kuiz') ? 'cth. Kuiz Bab 2' : 'cth. Ujian Pertengahan Tahun') + '" value="' + (p ? esc(p.tajuk) : '') + '" required></label>' +
+        '<label class="field"><span>Markah penuh</span><input class="input" name="penuh" type="number" inputmode="decimal" min="1" max="1000" step="0.5" value="' + (p ? nomb(p.markah_penuh) : 100) + '" required></label>' +
+        '<p class="error" data-err></p><button class="btn block" type="submit">' + (p ? 'Simpan' : 'Cipta') + '</button></form>',
+      { label: 'Penilaian', focus: 'input[name=tajuk]' });
+  }
+
+  async function simpanPenilaian(form) {
+    var err = form.querySelector('[data-err]'), btn = form.querySelector('[type=submit]');
+    var tajuk = form.tajuk.value.trim(), penuh = parseFloat(form.penuh.value);
+    if (!tajuk) { err.textContent = 'Tajuk tidak boleh kosong.'; return; }
+    if (!(penuh > 0 && penuh <= 1000)) { err.textContent = 'Markah penuh mesti antara 1 dan 1000.'; return; }
+    var id = form.dataset.id;
+    if (id && S.nilai) {
+      var tinggi = Object.keys(S.nilai.rows).reduce(function (m, k) { return Math.max(m, S.nilai.rows[k]); }, 0);
+      if (tinggi > penuh) { err.textContent = 'Ada markah murid (' + nomb(tinggi) + ') lebih tinggi daripada markah penuh baharu.'; return; }
+    }
+    btn.disabled = true;
+    var r = id
+      ? await sb.from('penilaian').update({ tajuk: tajuk, markah_penuh: penuh }).eq('id', id)
+      : await sb.from('penilaian').insert({ kelas_id: form.dataset.kelas, jenis: form.dataset.jenis, tajuk: tajuk, markah_penuh: penuh, tarikh: hariIni() }).select('id').single();
+    btn.disabled = false;
+    if (r.error) { err.textContent = errMsg(r.error); return; }
+    closeSheet();
+    if (id) { S.nilai.p.tajuk = tajuk; S.nilai.p.markah_penuh = penuh; lukisPenilaian(); toast('Dikemas kini.'); }
+    else go('#/nilai/' + form.dataset.kelas + '/' + r.data.id);
+  }
+
+  async function renderPenilaian(kelasId, id) {
+    var k = cariKelas(kelasId);
+    if (!k) return go('#/');
+    var hash = location.hash;
+    $app.innerHTML = '<div class="page">' + kepalaModul(k, 'assessment', 'Assessment', '#/modul/assessment/' + k.id) + '<p class="sub">Memuatkan…</p></div>';
+    var res = await Promise.all([
+      sb.from('penilaian').select('id,kelas_id,jenis,tajuk,markah_penuh,tarikh').eq('id', id).maybeSingle(),
+      sb.from('markah').select('murid_id,markah').eq('penilaian_id', id)
+    ]);
+    if (res[0].error) throw res[0].error;
+    if (res[1].error) throw res[1].error;
+    if (location.hash !== hash) return;
+    if (!res[0].data || res[0].data.kelas_id !== k.id) { toast('Tidak dijumpai.'); return go('#/modul/assessment/' + k.id); }
+    var rows = {};
+    (res[1].data || []).forEach(function (x) { rows[x.murid_id] = Number(x.markah); });
+    S.nilai = { kelasId: k.id, p: res[0].data, rows: rows };
+    lukisPenilaian();
+  }
+
+  function statNilai() {
+    var n = S.nilai, murid = muridKelas(n.kelasId);
+    var v = murid.map(function (m) { return n.rows[m.id]; }).filter(function (x) { return x !== undefined; });
+    if (!v.length) return 'Belum ada markah';
+    var jum = v.reduce(function (a, b) { return a + b; }, 0), pen = Number(n.p.markah_penuh);
+    return v.length + '/' + murid.length + ' dimasuk · purata <b>' + nomb(jum / v.length) + '</b> (' + Math.round(jum / v.length / pen * 100) + '%) · tertinggi ' + nomb(Math.max.apply(null, v)) + ' · terendah ' + nomb(Math.min.apply(null, v));
+  }
+
+  function lukisPenilaian() {
+    var n = S.nilai, k = cariKelas(n.kelasId), murid = muridKelas(k.id), pen = Number(n.p.markah_penuh);
+    $app.innerHTML = '<div class="page">' + kepalaModul(k, 'assessment', JENIS[n.p.jenis], '#/modul/assessment/' + k.id + '/' + n.p.jenis) +
+      '<div class="card between" style="padding:12px 14px;gap:8px"><div class="grow" style="min-width:0"><b style="display:block;font-size:16px">' + esc(n.p.tajuk) + '</b><span class="sub">' + esc(labelTarikh(n.p.tarikh, true)) + ' · markah penuh ' + nomb(pen) + '</span></div>' +
+        '<button class="icon-sm" data-act="nilai-ubah" aria-label="Ubah">' + I.edit + '</button><button class="icon-sm" data-act="nilai-padam" aria-label="Padam" style="color:var(--danger)">' + I.trash + '</button></div>' +
+      '<div class="card" style="padding:12px 14px"><span class="sub" data-nilai-stat>' + statNilai() + '</span></div>' +
+      (murid.length ? '<p class="sub" style="margin:0">Taip markah, tekan <b>Next / Enter</b> untuk ke murid seterusnya. Kosongkan untuk padam.</p>' +
+        '<div class="card list-card">' + murid.map(function (m, i) {
+          var v = n.rows[m.id];
+          return '<label class="list-item markah-row"><span class="grow" style="font-size:14px;font-weight:600">' + (m.no || i + 1) + '. ' + esc(m.nama) + '</span>' +
+            '<input class="input markah-in" data-markah-murid="' + m.id + '" type="number" inputmode="decimal" enterkeyhint="next" min="0" max="' + pen + '" step="0.5" value="' + (v !== undefined ? nomb(v) : '') + '" aria-label="Markah ' + esc(m.nama) + '"><span class="sub" style="width:40px">/' + nomb(pen) + '</span></label>';
+        }).join('') + '</div>'
+      : '<div class="card empty"><p class="sub">Belum ada murid dalam kelas ini.</p></div>') +
+    '</div>';
+  }
+
+  async function simpanMarkah(input) {
+    var n = S.nilai, id = input.dataset.markahMurid, pen = Number(n.p.markah_penuh);
+    var raw = input.value.trim(), lama = n.rows[id];
+    if (raw === '') {
+      if (lama === undefined) return;
+      delete n.rows[id];
+      var rd = await sb.from('markah').delete().eq('penilaian_id', n.p.id).eq('murid_id', id);
+      if (rd.error) { n.rows[id] = lama; input.value = nomb(lama); toast('Tidak dipadam: ' + errMsg(rd.error)); }
+    } else {
+      var v = parseFloat(raw.replace(',', '.'));
+      if (isNaN(v) || v < 0 || v > pen) { input.classList.add('salah'); toast('Markah mesti antara 0 dan ' + nomb(pen) + '.'); return; }
+      input.classList.remove('salah');
+      if (lama === v) return;
+      n.rows[id] = v;
+      var r = await sb.from('markah').upsert({ penilaian_id: n.p.id, murid_id: id, markah: v }, { onConflict: 'penilaian_id,murid_id' });
+      if (r.error) { if (lama === undefined) delete n.rows[id]; else n.rows[id] = lama; input.value = lama === undefined ? '' : nomb(lama); toast('Tidak disimpan: ' + errMsg(r.error)); }
+      else { input.classList.add('ok'); setTimeout(function () { input.classList.remove('ok'); }, 900); }
+    }
+    var st = $app.querySelector('[data-nilai-stat]'); if (st) st.innerHTML = statNilai();
+  }
+  document.addEventListener('change', function (e) { if (e.target.matches && e.target.matches('[data-markah-murid]')) simpanMarkah(e.target); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' || !e.target.matches || !e.target.matches('[data-markah-murid]')) return;
+    e.preventDefault();
+    var all = Array.prototype.slice.call($app.querySelectorAll('[data-markah-murid]')), i = all.indexOf(e.target);
+    if (all[i + 1]) { all[i + 1].focus(); all[i + 1].select(); } else e.target.blur();
+  });
+
+  async function padamPenilaian() {
+    var n = S.nilai;
+    if (!confirm('Padam ' + JENIS[n.p.jenis].toLowerCase() + ' "' + n.p.tajuk + '"?\nSemua markah murid untuknya akan hilang dan tidak boleh dikembalikan.')) return;
+    var r = await sb.from('penilaian').delete().eq('id', n.p.id);
+    if (r.error) { toast(errMsg(r.error)); return; }
+    toast('Dipadam.'); go('#/modul/assessment/' + n.kelasId + '/' + n.p.jenis);
+  }
+
   /* ---------- Modul (akan datang) ---------- */
   function renderModul(id, kelasId) {
     var m = MODUL.filter(function (x) { return x.id === id; })[0];
@@ -1233,10 +1483,7 @@
       '<div class="card list-card">' +
         '<div class="list-item" style="align-items:flex-start">' + logo('attendx', 36) + '<span class="grow" data-prof-hadir><b style="display:block">AttendX</b><span class="sub">Memuatkan…</span></span></div>' +
         '<div class="list-item" style="align-items:flex-start">' + logo('tasktrack', 36) + '<span class="grow" data-prof-kr><b style="display:block">TaskTrack</b><span class="sub">Memuatkan…</span></span></div>' +
-        ['assessment'].map(function (mid) {
-          var mm = MODUL.filter(function (x) { return x.id === mid; })[0];
-          return '<div class="list-item">' + logo(mid, 36) + '<span class="grow"><b style="display:block">' + mm.nama + '</b><span class="sub">Akan dipaparkan bila modul ini siap</span></span></div>';
-        }).join('') +
+        '<div class="list-item" style="align-items:flex-start">' + logo('assessment', 36) + '<span class="grow" data-prof-as><b style="display:block">Assessment</b><span class="sub">Memuatkan…</span></span></div>' +
       '</div>' +
       '<span class="section-title">QR murid</span>' +
       '<div class="card stack" style="padding:16px;align-items:center;gap:12px">' +
@@ -1247,6 +1494,7 @@
     '</div>';
     muatHadirMurid(m.id, links);
     muatKrMurid(m.id, links);
+    muatAsMurid(m.id);
   }
 
   async function muatHadirMurid(muridId, links) {
@@ -1287,6 +1535,28 @@
         return '<span class="sub" style="display:block">' + esc(x.k.nama + (x.k.subjek ? ' · ' + x.k.subjek : '')) + ': <b>' + x.siap + '/' + x.jumlah + '</b> siap</span>';
       }).join('') +
       (tak.length ? '<span class="sub" style="display:block;margin-top:6px;color:#C2410C"><b>Belum siap:</b> ' + tak.slice(0, 5).map(function (h) { return esc(h.tugasan.tajuk); }).join(', ') + (tak.length > 5 ? ' dan ' + (tak.length - 5) + ' lagi' : '') + '</span>' : '<span class="sub" style="display:block;margin-top:6px">Tiada kerja rumah tertunggak.</span>');
+  }
+
+  async function muatAsMurid(muridId) {
+    var res = await Promise.all([
+      sb.from('pbd_tp').select('tp,pbd_item(tajuk,urutan,subjek)').eq('murid_id', muridId).limit(1000),
+      sb.from('markah').select('markah,penilaian(tajuk,markah_penuh,tarikh,jenis)').eq('murid_id', muridId).limit(1000)
+    ]);
+    var el = $app.querySelector('[data-prof-as]');
+    if (!el) return;
+    var e = res[0].error || res[1].error;
+    if (e) { el.innerHTML = '<b style="display:block">Assessment</b><span class="error">' + esc(errMsg(e)) + '</span>'; return; }
+    var tp = (res[0].data || []).filter(function (x) { return x.pbd_item; }).sort(function (a, b) { return a.pbd_item.urutan - b.pbd_item.urutan; });
+    var mk = (res[1].data || []).filter(function (x) { return x.penilaian; }).sort(function (a, b) { return a.penilaian.tarikh < b.penilaian.tarikh ? 1 : -1; });
+    if (!tp.length && !mk.length) { el.innerHTML = '<b style="display:block">Assessment</b><span class="sub">Belum ada rekod PBD atau markah.</span>'; return; }
+    el.innerHTML = '<b style="display:block">Assessment</b>' +
+      (tp.length ? '<div class="row" style="gap:6px;flex-wrap:wrap;margin-top:4px">' + tp.map(function (x) {
+        var w = TP_WARNA[x.tp];
+        return '<span class="chip" style="background:' + w[0] + ';color:' + w[1] + '" title="' + esc(x.pbd_item.tajuk) + '">' + esc(x.pbd_item.tajuk.length > 22 ? x.pbd_item.tajuk.slice(0, 21) + '…' : x.pbd_item.tajuk) + ' · TP' + x.tp + '</span>';
+      }).join('') + '</div>' : '') +
+      (mk.length ? '<span class="sub" style="display:block;margin-top:6px">' + mk.slice(0, 5).map(function (x) {
+        return esc(x.penilaian.tajuk) + ': <b>' + nomb(x.markah) + '/' + nomb(x.penilaian.markah_penuh) + '</b> (' + Math.round(x.markah / x.penilaian.markah_penuh * 100) + '%)';
+      }).join('<br>') + '</span>' : '');
   }
 
   async function janaQrBaru(id) {
@@ -1335,6 +1605,15 @@
     'alert': function () { toast('Akan aktif selepas modul TaskTrack siap.'); },
     'alert-lama': function (el) { sheetLamaTakHadir(el.dataset.id); },
     'alert-kr': function (el) { sheetKrTertunggak(el.dataset.id); },
+    'as-tab': function (el) { location.replace('#/modul/assessment/' + el.dataset.id + '/' + el.dataset.tab); },
+    'pbd-tulis': function (el) { sheetTulisBab(el.dataset.id); },
+    'pbd-ubah': function () { sheetUbahBab(); },
+    'pbd-padam': function () { padamBab(); },
+    'tp-pilih': function (el) { S.pbd.pilih = +el.dataset.tp; lukisPbd(); },
+    'tp-semua': function () { var p = S.pbd; simpanTp(muridKelas(p.kelasId).filter(function (m) { return !p.rows[m.id]; }).map(function (m) { return [m.id, p.pilih]; })); },
+    'nilai-baru': function (el) { sheetPenilaian(el.dataset.id, el.dataset.jenis); },
+    'nilai-ubah': function () { sheetPenilaian(S.nilai.kelasId, null, S.nilai.p); },
+    'nilai-padam': function () { padamPenilaian(); },
     'tt-baru': function (el) { sheetTugasanBaru(el.dataset.id); },
     'tt-ubah': function () { sheetTugasanBaru(S.tt.kelasId, S.tt.tugasan); },
     'tt-padam': function () { padamTugasan(); },
@@ -1402,6 +1681,15 @@
   /* ---------- Borang ---------- */
   var FORM = {
     'tugasan': simpanTugasan,
+    'pbd-tulis': simpanBab,
+    'penilaian': simpanPenilaian,
+    'pbd-ubah': async function (form) {
+      var err = form.querySelector('[data-err]'), t = form.tajuk.value.trim();
+      if (!t) { err.textContent = 'Tajuk tidak boleh kosong.'; return; }
+      var r = await sb.from('pbd_item').update({ tajuk: t }).eq('id', S.pbd.item.id);
+      if (r.error) { err.textContent = errMsg(r.error); return; }
+      S.pbd.item.tajuk = t; closeSheet(); lukisPbd(); toast('Tajuk dikemas kini.');
+    },
     'masuk': submitMasuk,
     'daftar': submitDaftar,
     'laluan-baru': async function (form) {
