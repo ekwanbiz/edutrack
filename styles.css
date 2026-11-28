@@ -363,3 +363,5 @@ input[type="date"].input { min-height: 48px; }
 .notif-bar[hidden] { display: none; }
 .notif-bar .alert { flex: 1 1 0; min-width: 0; }
 .notif-bar .alert span { line-height: 1.2; }
+/* Kotak notifikasi: nombor & label di tengah (versi 26) */
+.notif-bar .alert { align-items: center; justify-content: center; text-align: center; }

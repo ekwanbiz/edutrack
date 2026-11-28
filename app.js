@@ -12,7 +12,7 @@
   var $toast = document.getElementById('toast');
 
   /* Nombor versi app. Naikkan SERENTAK dengan version.json dan CACHE dalam sw.js. */
-  var VERSI = '25';
+  var VERSI = '26';
 
   var S = { session: null, profil: null, kelas: [], murid: [], loaded: false, q: '', authTab: 'masuk', recovery: false, scanner: null };
 

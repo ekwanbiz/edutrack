@@ -1,10 +1,10 @@
 // Service worker EduTrack: simpan fail app supaya boleh dibuka tanpa internet.
-const CACHE = 'edutrack-v25'; // sama dengan VERSI dalam app.js dan version.json
+const CACHE = 'edutrack-v26'; // sama dengan VERSI dalam app.js dan version.json
 const FILES = [
   './',
   './index.html',
-  './styles.css?v=25',
-  './app.js?v=25',
+  './styles.css?v=26',
+  './app.js?v=26',
   './config.js',
   './vendor/supabase.js',
   './vendor/qrcode.js',
