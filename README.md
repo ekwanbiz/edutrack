@@ -25,7 +25,7 @@ App pengurusan kelas untuk guru (PWA). Dibina dengan HTML, CSS dan JavaScript bi
 - Sepanduk versi baharu; mesej kamera yang mengesan pelayar mini; skrin tidak malap semasa scan
 - GitHub Actions `Jaga Supabase` setiap hari supaya projek percuma tidak dijeda
 
-**Naik versi:** tukar `VERSI` dalam `app.js`, `version.json` dan `CACHE` dalam `sw.js` serentak.
+**Naik versi:** tukar serentak `VERSI` dalam `app.js`, `version.json`, `CACHE` dalam `sw.js`, dan `?v=` pada `app.js`/`styles.css` dalam `index.html` dan senarai `FILES` dalam `sw.js`.
 
 ## Status
 Semua 6 modul siap (27 Nov 2026).
