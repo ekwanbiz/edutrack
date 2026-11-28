@@ -12,7 +12,7 @@
   var $toast = document.getElementById('toast');
 
   /* Nombor versi app. Naikkan SERENTAK dengan version.json dan CACHE dalam sw.js. */
-  var VERSI = '21';
+  var VERSI = '22';
 
   var S = { session: null, profil: null, kelas: [], murid: [], loaded: false, q: '', authTab: 'masuk', recovery: false, scanner: null };
 
@@ -2027,7 +2027,6 @@
     var k = cariKelas(id);
     if (!k) return go('#/urus');
     var murid = muridKelas(k.id);
-    var lain = S.kelas.filter(function (x) { return x.id !== k.id && bilMurid(x.id) > 0; });
     $app.innerHTML = '<div class="page">' +
       '<div class="row"><a class="icon-btn" href="#/kelas/' + k.id + '" aria-label="Kembali ke ' + esc(k.nama) + '">' + I.back + '</a><div class="row" style="gap:10px">' + logo('urus', 40) + '<div><h2>Manage ' + esc(k.nama) + '</h2><span class="sub">' + esc(k.subjek || '') + '</span></div></div></div>' +
 
@@ -2045,10 +2044,6 @@
         '<p class="sub" style="margin:0">Boleh salin terus dari Excel, Google Sheet atau WhatsApp. Nombor di depan nama akan dibuang secara automatik.</p>' +
         '<p class="error" data-err></p><button class="btn" type="submit">Tambah murid</button>' +
       '</form>' +
-      (lain.length ? '<form class="card stack" style="padding:16px;gap:12px" data-form="salin-murid" data-id="' + k.id + '" novalidate>' +
-        '<label class="field"><span>Atau salin murid dari kelas lain</span><select class="input" name="dari">' + lain.map(function (x) { return '<option value="' + x.id + '">' + esc(x.nama + (x.subjek ? ' · ' + x.subjek : '') + ' (' + bilMurid(x.id) + ' murid)') + '</option>'; }).join('') + '</select></label>' +
-        '<p class="sub" style="margin:0">Sesuai bila cikgu ajar kelas yang sama untuk subjek lain. Murid yang sama dikongsi, jadi profil mereka digabungkan.</p>' +
-        '<button class="btn secondary" type="submit">Salin murid</button></form>' : '') +
 
       '<div class="between"><span class="section-title">Senarai murid (' + murid.length + ')</span>' +
         (murid.length ? '<a class="btn ghost" href="#/cetak/' + k.id + '">Cetak sticker QR</a>' : '') + '</div>' +
@@ -2100,22 +2095,6 @@
     await loadData(true);
     if (!(await susunGiliran(kelasId)).error) await loadData(true);
     toast(names.length + ' murid ditambah.');
-    renderUrusKelas(kelasId);
-  }
-
-  async function salinMurid(kelasId, form) {
-    var dari = form.dari.value, btn = form.querySelector('[type=submit]');
-    var ada = muridKelas(kelasId).map(function (m) { return m.id; });
-    var src = muridKelas(dari).filter(function (m) { return ada.indexOf(m.id) < 0; });
-    if (!src.length) { toast('Semua murid kelas itu sudah ada di sini.'); return; }
-    btn.disabled = true;
-    var start = muridKelas(kelasId).reduce(function (mx, m) { return Math.max(mx, m.no || 0); }, 0);
-    var r = await sb.from('kelas_murid').insert(src.map(function (m, i) { return { kelas_id: kelasId, murid_id: m.id, no_giliran: ada.length ? start + i + 1 : m.no }; }));
-    btn.disabled = false;
-    if (r.error) { toast(errMsg(r.error)); return; }
-    await loadData(true);
-    if (!(await susunGiliran(kelasId)).error) await loadData(true);
-    toast(src.length + ' murid disalin.');
     renderUrusKelas(kelasId);
   }
 
@@ -2736,7 +2715,6 @@
       await loadData(true); toast('Maklumat kelas disimpan.'); renderUrusKelas(form.dataset.id);
     },
     'tampal': function (form) { return tambahMurid(form.dataset.id, form); },
-    'salin-murid': function (form) { return salinMurid(form.dataset.id, form); },
     'murid-edit': async function (form) {
       var err = form.querySelector('[data-err]'), nama = form.nama.value.trim();
       if (!nama) { err.textContent = 'Isi nama murid.'; return; }
