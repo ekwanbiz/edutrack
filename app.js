@@ -12,7 +12,7 @@
   var $toast = document.getElementById('toast');
 
   /* Nombor versi app. Naikkan SERENTAK dengan version.json dan CACHE dalam sw.js. */
-  var VERSI = '14';
+  var VERSI = '15';
 
   var S = { session: null, profil: null, kelas: [], murid: [], loaded: false, q: '', authTab: 'masuk', recovery: false, scanner: null };
 
@@ -2268,9 +2268,9 @@
     var m = S.murid.filter(function (x) { return x.id === muridId; })[0], k = cariKelas(kelasId), hari = hariIni();
     var links = (m.kelas_murid || []).map(function (l) { return cariKelas(l.kelas_id); }).filter(Boolean);
     var res = await Promise.all([
-      sb.from('kehadiran').select('murid_id,hadir,sebab').eq('kelas_id', k.id).eq('tarikh', hari),
+      { data: [], error: null },
       sb.rpc('ringkasan_tugasan', { p_kelas: k.id, p_had: 5, p_jenis: 'kr' }),
-      sb.rpc('ringkasan_tugasan', { p_kelas: k.id, p_had: 5, p_jenis: 'buku' }),
+      { data: [], error: null },
       sb.rpc('ringkasan_pbd', { p_kelas: k.id }),
       sb.from('pbd_tp').select('item_id,tp').eq('murid_id', muridId).eq('kelas_id', k.id)
     ]);
@@ -2312,20 +2312,14 @@
     box.innerHTML = '<div class="card stack tdk" style="padding:14px 16px;gap:12px">' +
       '<div class="between"><b style="font-size:16px">Tindakan</b>' + (links.length > 1 ? '' : '<span class="sub">' + esc(k.nama + (k.subjek ? ' · ' + k.subjek : '')) + '</span>') + '</div>' +
       (links.length > 1 ? '<div class="row" style="gap:6px;flex-wrap:wrap">' + links.map(function (x) { return '<button class="chip tdk-kelas' + (x.id === k.id ? ' on' : '') + '" data-act="tdk-kelas" data-id="' + x.id + '">' + esc(x.nama + (x.subjek ? ' · ' + x.subjek : '')) + '</button>'; }).join('') + '</div>' : '') +
-      (t.luar ? '<div class="luar-nota" style="padding:8px 10px">Tiada internet: kehadiran dan tanda disimpan dalam telefon; PBD perlu internet.</div>' : '') +
-      '<div class="stack" style="gap:6px"><span class="tdk-h">Kehadiran hari ini</span>' +
-        seg(h ? (tak ? 'n' : 'y') : '', [['tdk-hadir', '✓ Hadir', ' data-v="1"', 'y', 'ok'], ['tdk-hadir', '✗ Tidak hadir', ' data-v="0"', 'n', 'no']]) +
-        (tak ? '<div class="row" style="gap:6px;flex-wrap:wrap">' + SEBAB.map(function (sb2) { return '<button class="chip tdk-sebab' + (h.sebab === sb2 ? ' on' : '') + '" data-act="tdk-sebab" data-v="' + esc(sb2) + '">' + esc(sb2) + '</button>'; }).join('') + '</div>' : '') +
-        (!t.adaHari ? '<span class="sub">Kehadiran kelas ini belum direkod hari ini. Jika anda tanda di sini, murid lain dikira hadir.</span>' : '') +
-      '</div>' +
-      '<div class="stack" style="gap:6px"><span class="tdk-h">Kerja rumah</span>' + senaraiTugasan('kr') + '</div>' +
-      '<div class="stack" style="gap:6px"><span class="tdk-h">Kutip buku</span>' + senaraiTugasan('buku') + '</div>' +
+      (t.luar ? '<div class="luar-nota" style="padding:8px 10px">Tiada internet: tanda kerja rumah disimpan dalam telefon; PBD perlu internet.</div>' : '') +
       '<div class="stack" style="gap:6px"><span class="tdk-h">PBD</span>' +
         (t.bab.length ? '<select class="input" data-input="tdk-bab" aria-label="Pilih Bab">' + t.bab.map(function (b) { return '<option value="' + b.id + '"' + (b.id === t.babPilih ? ' selected' : '') + '>' + esc(b.tajuk) + (t.tp[b.id] ? ' — TP' + t.tp[b.id] : '') + '</option>'; }).join('') + '</select>' +
           '<div class="tp-pilih">' + [1, 2, 3, 4, 5, 6].map(function (n) { var on = bab && t.tp[bab.id] === n, w = TP_WARNA[n]; return '<button class="tp-btn" data-act="tdk-tp" data-v="' + n + '" aria-pressed="' + on + '" style="background:' + w[0] + ';color:' + w[1] + '"><b>TP' + n + '</b></button>'; }).join('') + '</div>' +
           '<span class="sub">Tekan TP yang sama sekali lagi untuk padam.</span>'
         : '<p class="sub" style="margin:0">Belum ada Bab untuk subjek ini. Tulis Bab dalam Assessment.</p>') +
       '</div>' +
+      '<div class="stack" style="gap:6px"><span class="tdk-h">Kerja rumah</span>' + senaraiTugasan('kr') + '</div>' +
     '</div>';
   }
 

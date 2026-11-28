@@ -343,3 +343,4 @@ button.saved { border: none; font: inherit; cursor: pointer; }
 .catatan-row:first-child { border-top: none; }
 .tp-btn[aria-pressed="true"] { outline: 3px solid var(--text); outline-offset: 1px; }
 .catatan-in { height: 48px; }
+textarea.catatan-in { height: 48px !important; min-height: 48px !important; }
