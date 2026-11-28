@@ -12,7 +12,7 @@
   var $toast = document.getElementById('toast');
 
   /* Nombor versi app. Naikkan SERENTAK dengan version.json dan CACHE dalam sw.js. */
-  var VERSI = '26';
+  var VERSI = '27';
 
   var S = { session: null, profil: null, kelas: [], murid: [], loaded: false, q: '', authTab: 'masuk', recovery: false, scanner: null };
 
@@ -687,20 +687,26 @@
   /* ---------- Bar notifikasi halaman kelas (versi 25) ----------
      Hanya jenis yang ada murid dipaparkan; tiada langsung = bar hilang sendiri.
      Kiraan dari pangkalan data (RPC ikut RLS guru). */
-  var LAMA_N = 3;
-  var NOTIF = [
-    { id: 'lama', label: 'Tak hadir 3 hari', warna: '#DC2626', bg: '#FEE2E2', fg: '#B91C1C',
-      nota: 'Murid yang tidak hadir dalam ' + LAMA_N + ' rekod kehadiran terakhir secara berturut-turut. Nama hilang sendiri bila murid hadir.' },
-    { id: 'kr', label: 'KR tak siap', warna: '#EA580C', bg: '#FFEDD5', fg: '#C2410C', unit: 'tugasan',
-      nota: 'Murid yang masih ada kerja rumah Tidak siap. Nama hilang sendiri bila ditanda Siap.' },
-    { id: 'buku', label: 'Buku tak hantar', warna: '#B45309', bg: '#FEF3C7', fg: '#92400E', unit: 'buku',
-      nota: 'Murid yang belum hantar buku (Kutip buku). Nama hilang sendiri bila ditanda Hantar.' },
-    { id: 'tp', label: 'TP1 / TP2', warna: '#6D28D9', bg: '#EDE9FE', fg: '#5B21B6', unit: 'Bab',
-      nota: 'Murid yang mendapat TP1 atau TP2 dalam sekurang-kurangnya satu Bab (TP semasa). Nama hilang sendiri bila TP dinaikkan.' }
+  // Tahap warna (ditetapkan cikgu, versi 27). Ambang: [kuning, oren, merah].
+  var TAHAP = [
+    { id: 'kuning', no: '#A16207', bg: '#FEF9C3', bd: '#FACC15' },
+    { id: 'oren', no: '#C2410C', bg: '#FFEDD5', bd: '#FB923C' },
+    { id: 'merah', no: '#B91C1C', bg: '#FEE2E2', bd: '#F87171' }
   ];
+  var NOTIF = [
+    { id: 'lama', label: 'Tak hadir', had: [3, 5, 7], unit: 'hari', ikutMurid: true,
+      nota: 'Tidak hadir berturut-turut (rekod kehadiran terkini). Nama hilang sendiri bila murid hadir.' },
+    { id: 'kr', label: 'KR tak siap', had: [1, 3, 5], unit: 'kali', ikutMurid: true,
+      nota: 'Bilangan kerja rumah yang masih Tidak siap. Nama hilang sendiri bila ditanda Siap.' },
+    { id: 'buku', label: 'Buku tak hantar', had: [1, 3, 5], unit: 'kali', ikutMurid: true,
+      nota: 'Bilangan Kutip buku yang masih Tidak hantar. Nama hilang sendiri bila ditanda Hantar.' },
+    { id: 'tp', label: 'TP1 / TP2', had: [3, 7, 10], unit: 'Bab', ikutMurid: false,
+      nota: 'Murid dengan TP1 atau TP2 dalam sekurang-kurangnya satu Bab. Warna ikut bilangan murid: kuning 3, oren 7, merah 10.' }
+  ];
+  function tahapDari(had, n) { return n >= had[2] ? 2 : n >= had[1] ? 1 : n >= had[0] ? 0 : -1; }
   async function muatNotif(kelasId) {
     var res = await Promise.all([
-      sb.rpc('lama_tak_hadir', { p_kelas: kelasId, p_n: LAMA_N }),
+      sb.rpc('tak_hadir_berturut', { p_kelas: kelasId, p_min: 3 }),
       sb.rpc('kr_tertunggak', { p_kelas: kelasId }),
       sb.rpc('buku_tak_hantar', { p_kelas: kelasId }),
       sb.rpc('tp_rendah', { p_kelas: kelasId, p_had: 2 })
@@ -714,21 +720,32 @@
     S.notif = d;
     var el = $app.querySelector('[data-notif]');
     if (!el || S.kelasTerakhir !== kelasId) return;
-    var ada = NOTIF.filter(function (n) { return Object.keys(d[n.id]).length; });
-    el.hidden = !ada.length;
-    el.innerHTML = ada.map(function (n) {
-      return '<button class="alert" data-act="notif" data-jenis="' + n.id + '" data-id="' + kelasId + '"><b style="color:' + n.warna + '">' + Object.keys(d[n.id]).length + '</b><span>' + n.label + '</span></button>';
+    var kotak = NOTIF.map(function (n) {
+      var v = d[n.id], ids = Object.keys(v), t;
+      if (n.ikutMurid) t = ids.reduce(function (mx, id) { return Math.max(mx, tahapDari(n.had, v[id])); }, -1); // tahap murid paling teruk
+      else t = tahapDari(n.had, ids.length); // TP: ikut bilangan murid
+      return { n: n, bil: ids.length, t: t };
+    }).filter(function (x) { return x.t >= 0; });
+    el.hidden = !kotak.length;
+    el.innerHTML = kotak.map(function (x) {
+      var w = TAHAP[x.t];
+      return '<button class="alert" data-act="notif" data-jenis="' + x.n.id + '" data-id="' + kelasId + '" data-tahap="' + w.id + '" style="background:' + w.bg + ';box-shadow:inset 0 0 0 2px ' + w.bd + '" aria-label="' + x.n.label + ': ' + x.bil + ' murid, tahap ' + w.id + '"><b style="color:' + w.no + '">' + x.bil + '</b><span>' + x.n.label + '</span></button>';
     }).join('');
   }
   function sheetNotif(kelasId, jenis) {
     var n = NOTIF.filter(function (x) { return x.id === jenis; })[0], k = cariKelas(kelasId);
     var bil = (S.notif && S.notif.kelasId === kelasId && S.notif[jenis]) || {};
-    var list = muridKelas(kelasId).filter(function (m) { return bil[m.id]; });
+    var list = muridKelas(kelasId).filter(function (m) { return bil[m.id]; })
+      .sort(function (a, b) { return bil[b.id] - bil[a.id] || bandingNama(a, b); }); // paling teruk di atas
+    var tKotak = n.ikutMurid ? -1 : tahapDari(n.had, list.length);
+    var petunjuk = n.ikutMurid ? '<span class="sub">Kuning ' + n.had[0] + ' · Oren ' + n.had[1] + ' · Merah ' + n.had[2] + ' ' + n.unit + '</span>' : '';
     openSheet('<div class="between"><h2>' + n.label + '</h2><button class="icon-sm" data-act="sheet-close" aria-label="Tutup">' + I.close + '</button></div>' +
-      '<p class="sub" style="margin:0">' + esc(k ? k.nama : '') + ' · ' + n.nota + '</p>' +
+      '<p class="sub" style="margin:0">' + esc(k ? k.nama : '') + ' · ' + n.nota + '</p>' + petunjuk +
       '<div class="sheet-scroll">' + (list.length ? list.map(function (m) {
-        return '<button class="list-row" data-act="profil-murid" data-id="' + m.id + '"><span class="murid-av" style="width:36px;height:36px;font-size:13px;background:' + n.bg + ';color:' + n.fg + '">' + esc(inisial(m.nama)) + '</span><span class="grow" style="font-size:15px;font-weight:600">' + esc(m.nama) + '</span>' +
-          (n.unit ? '<span class="chip" style="background:' + n.bg + ';color:' + n.fg + '">' + bil[m.id] + ' ' + n.unit + '</span>' : '<span class="muted">' + I.chev + '</span>') + '</button>';
+        var t = n.ikutMurid ? tahapDari(n.had, bil[m.id]) : tKotak, w = TAHAP[Math.max(0, t)];
+        var gaya = t >= 0 ? 'background:' + w.bg + ';color:' + w.no : 'background:var(--soft);color:var(--muted)';
+        return '<button class="list-row" data-act="profil-murid" data-id="' + m.id + '"><span class="murid-av" style="width:36px;height:36px;font-size:13px;' + gaya + '">' + esc(inisial(m.nama)) + '</span><span class="grow" style="font-size:15px;font-weight:600">' + esc(m.nama) + '</span>' +
+          '<span class="chip" style="' + gaya + '">' + bil[m.id] + ' ' + n.unit + '</span></button>';
       }).join('') : '<p class="sub" style="padding:12px 2px">Tiada murid.</p>') + '</div>',
       { label: n.label });
   }
