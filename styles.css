@@ -348,3 +348,6 @@ input[type="date"].input { min-height: 48px; }
 /* Kepala halaman: logo & tajuk boleh ditekan untuk kembali */
 .row:has(> .icon-btn[aria-label^="Kembali"]) { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .row:has(> .icon-btn[aria-label^="Kembali"]):active > :not(.icon-btn) { opacity: .6; }
+/* Kad Tindakan: pengesahan selepas Simpan */
+.tdk-ok { min-height: 48px; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: #DCFCE7; color: #166534; font-weight: 800; font-size: 15px; border: 1.5px solid #16A34A; text-align: center; padding: 6px 12px; }
+[data-mode="dark"] .tdk-ok { background: #052E16; color: #86EFAC; }

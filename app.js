@@ -12,7 +12,7 @@
   var $toast = document.getElementById('toast');
 
   /* Nombor versi app. Naikkan SERENTAK dengan version.json dan CACHE dalam sw.js. */
-  var VERSI = '17';
+  var VERSI = '18';
 
   var S = { session: null, profil: null, kelas: [], murid: [], loaded: false, q: '', authTab: 'masuk', recovery: false, scanner: null };
 
@@ -405,6 +405,9 @@
 
   /* ---------- Router ---------- */
   async function route() {
+    if (S.hashKini && location.hash !== S.hashKini && !tinggalTdk()) { history.replaceState(null, '', S.hashKini); return; }
+    if (S.hashKini !== location.hash) { S.tdk = null; S.langkah = (S.langkah || 0) + 1; }
+    S.hashKini = location.hash;
     closeSheet();
     hentiScanner();
     try {
@@ -2269,6 +2272,7 @@
     if (!box) return;
     var m = S.murid.filter(function (x) { return x.id === muridId; })[0], k = cariKelas(kelasId), hari = hariIni();
     var links = (m.kelas_murid || []).map(function (l) { return cariKelas(l.kelas_id); }).filter(Boolean);
+    var lamaT = S.tdk, lamaU = ubahTdk();
     var res = await Promise.all([
       { data: [], error: null },
       sb.rpc('ringkasan_tugasan', { p_kelas: k.id, p_had: 5, p_jenis: 'kr' }),
@@ -2288,7 +2292,11 @@
     var st = {}; (stRes.data || []).forEach(function (x) { st[x.tugasan_id] = x.siap; });
     rekodLuar('status_tugasan', function (r) { return r.murid_id === muridId; }).forEach(function (r) { st[r.tugasan_id] = r.siap; });
     var tpM = {}; (res[4].data || []).forEach(function (x) { tpM[x.item_id] = x.tp; });
-    S.tdk = { muridId: muridId, kelasId: k.id, hadir: hadirRows[muridId] || null, adaHari: adaHari, st: st, tugasan: { kr: res[1].data || [], buku: res[2].data || [] }, bab: res[3].data || [], tp: tpM, babPilih: (S.tdk && S.tdk.kelasId === k.id && S.tdk.babPilih) || null, luar: luar };
+    S.tdk = { muridId: muridId, kelasId: k.id, hadir: hadirRows[muridId] || null, adaHari: adaHari, st: st, tugasan: { kr: res[1].data || [], buku: res[2].data || [] }, bab: res[3].data || [], tp: tpM, babPilih: (S.tdk && S.tdk.kelasId === k.id && S.tdk.babPilih) || null, luar: luar, tpAsal: Object.assign({}, tpM), stAsal: Object.assign({}, st), disimpan: false, sedang: false };
+    if (lamaT && lamaT.muridId === muridId && lamaT.kelasId === k.id) { // muat semula halaman yang sama: kekalkan pilihan yang belum disimpan
+      lamaU.tp.forEach(function (i) { if (lamaT.tp[i]) S.tdk.tp[i] = lamaT.tp[i]; else delete S.tdk.tp[i]; });
+      lamaU.st.forEach(function (i) { S.tdk.st[i] = lamaT.st[i]; });
+    }
     if (!S.tdk.babPilih) { var b0 = S.tdk.bab.filter(function (b) { return !tpM[b.id]; })[0] || S.tdk.bab[0]; S.tdk.babPilih = b0 ? b0.id : null; }
     lukisTindakan(links);
   }
@@ -2322,6 +2330,7 @@
         : '<p class="sub" style="margin:0">Belum ada Bab untuk subjek ini. Tulis Bab dalam Assessment.</p>') +
       '</div>' +
       '<div class="stack" style="gap:6px"><span class="tdk-h">Kerja rumah</span>' + senaraiTugasan('kr') + '</div>' +
+      butangSimpanTdk() +
     '</div>';
   }
 
@@ -2339,28 +2348,62 @@
     muatHadirMurid(t.muridId, (m.kelas_murid || []).map(function (l) { return { k: cariKelas(l.kelas_id) }; }).filter(function (x) { return x.k; }));
   }
 
-  async function tdkTugasan(tugasanId, siap) {
-    var t = S.tdk, lama = t.st[tugasanId];
-    t.st[tugasanId] = siap; lukisTindakan();
-    var r = await simpanRekod('status_tugasan', [{ tugasan_id: tugasanId, murid_id: t.muridId, siap: siap }]);
-    if (r.error) { if (lama === undefined) delete t.st[tugasanId]; else t.st[tugasanId] = lama; lukisTindakan(); toast('Tidak disimpan: ' + errMsg(r.error)); return; }
-    maklumLuarTalian(r);
-    var m = S.murid.filter(function (x) { return x.id === t.muridId; })[0];
-    muatKrMurid(t.muridId, (m.kelas_murid || []).map(function (l) { return { k: cariKelas(l.kelas_id) }; }).filter(function (x) { return x.k; }));
+  // Tekan TP / Siap hanya MEMILIH. Simpan berlaku bila guru tekan butang Simpan (permintaan cikgu, versi 18).
+  function ubahTdk() {
+    var t = S.tdk; if (!t) return { tp: [], st: [] };
+    var ids = {}; Object.keys(t.tp).concat(Object.keys(t.tpAsal)).forEach(function (i) { ids[i] = 1; });
+    return {
+      tp: Object.keys(ids).filter(function (i) { return (t.tp[i] || null) !== (t.tpAsal[i] || null); }),
+      st: Object.keys(t.st).filter(function (i) { return t.st[i] !== t.stAsal[i]; })
+    };
   }
-
-  async function tdkTp(n) {
+  function kiraUbahTdk() { var u = ubahTdk(); return u.tp.length + u.st.length; }
+  function butangSimpanTdk() {
+    var t = S.tdk, n = kiraUbahTdk();
+    if (t.sedang) return '<button class="btn block" disabled>Menyimpan…</button>';
+    if (n) return '<button class="btn block" data-act="tdk-simpan">Simpan (' + n + ' perubahan)</button>';
+    if (t.disimpan) return '<div class="tdk-ok" role="status">' + (t.disimpan === 'luar' ? '⏳ Disimpan dalam telefon — dihantar bila ada internet' : '✓ Disimpan') + '</div>';
+    return '<button class="btn block" disabled>Simpan</button>';
+  }
+  function tdkTugasan(tugasanId, siap) {
+    var t = S.tdk; t.st[tugasanId] = siap; t.disimpan = false; lukisTindakan();
+  }
+  function tdkTp(n) {
     var t = S.tdk, id = t.babPilih;
     if (!id) return;
-    var lama = t.tp[id], baru = lama === n ? null : n;
-    if (baru) t.tp[id] = baru; else delete t.tp[id];
+    if (t.tp[id] === n) delete t.tp[id]; else t.tp[id] = n;
+    t.disimpan = false; lukisTindakan();
+  }
+  async function simpanTdk() {
+    var t = S.tdk, u = ubahTdk(), gagal = [], luar = false;
+    if (!u.tp.length && !u.st.length) return;
+    t.sedang = true; lukisTindakan();
+    if (u.st.length) {
+      var r1 = await simpanRekod('status_tugasan', u.st.map(function (id) { return { tugasan_id: id, murid_id: t.muridId, siap: t.st[id] }; }));
+      if (r1.error) gagal.push('Kerja rumah: ' + errMsg(r1.error));
+      else { u.st.forEach(function (id) { t.stAsal[id] = t.st[id]; }); if (r1.luar) luar = true; }
+    }
+    var naik = u.tp.filter(function (id) { return t.tp[id]; }), padam = u.tp.filter(function (id) { return !t.tp[id]; });
+    if (naik.length) {
+      var r2 = await sb.from('pbd_tp').upsert(naik.map(function (id) { return { item_id: id, murid_id: t.muridId, kelas_id: t.kelasId, tp: t.tp[id] }; }), { onConflict: 'item_id,murid_id' });
+      if (r2.error) gagal.push('PBD: ' + errMsg(r2.error)); else naik.forEach(function (id) { t.tpAsal[id] = t.tp[id]; });
+    }
+    if (padam.length) {
+      var r3 = await sb.from('pbd_tp').delete().eq('murid_id', t.muridId).in('item_id', padam);
+      if (r3.error) gagal.push('PBD: ' + errMsg(r3.error)); else padam.forEach(function (id) { delete t.tpAsal[id]; });
+    }
+    if (S.tdk !== t) return; // guru sudah tukar halaman
+    t.sedang = false;
+    t.disimpan = gagal.length ? false : (luar ? 'luar' : true);
     lukisTindakan();
-    var r = baru
-      ? await sb.from('pbd_tp').upsert({ item_id: id, murid_id: t.muridId, kelas_id: t.kelasId, tp: baru }, { onConflict: 'item_id,murid_id' })
-      : await sb.from('pbd_tp').delete().eq('item_id', id).eq('murid_id', t.muridId);
-    if (r.error) { if (lama) t.tp[id] = lama; else delete t.tp[id]; lukisTindakan(); toast('Tidak disimpan: ' + errMsg(r.error)); return; }
-    toast(baru ? 'TP' + baru + ' disimpan.' : 'TP dipadam.');
+    if (gagal.length) toast('Belum disimpan — ' + gagal[0] + '. Tekan Simpan sekali lagi.');
+    else { toast(luar ? 'Disimpan dalam telefon.' : 'Disimpan ✓'); kemasPetunjukOutbox(); }
+    var m = S.murid.filter(function (x) { return x.id === t.muridId; })[0];
+    muatKrMurid(t.muridId, (m.kelas_murid || []).map(function (l) { return { k: cariKelas(l.kelas_id) }; }).filter(function (x) { return x.k; }));
     muatAsMurid(t.muridId);
+  }
+  function tinggalTdk() {
+    return !S.tdk || !kiraUbahTdk() || confirm('Ada ' + kiraUbahTdk() + ' perubahan belum disimpan dalam kad Tindakan.\nTinggalkan tanpa simpan?');
   }
 
   /* ---------- Catatan murid ---------- */
@@ -2493,7 +2536,7 @@
       if (r.error) { k.disemat = !baru; toast(errMsg(r.error)); if (list) list.innerHTML = homeList(); }
     },
     'scan': function () { go('#/scan'); },
-    'back': function () { if (history.length > 1) history.back(); else go('#/'); },
+    'back': function () { if ((S.langkah || 0) > 1) history.back(); else go('#/'); }, // jangan keluar dari app jika halaman ini dibuka terus
     'cetak': function () { cetakSekarang(); },
     'garis-panduan': function (el) { var w = $app.querySelector('.preview-wrap'); if (w) { w.classList.toggle('guides'); el.setAttribute('aria-pressed', String(w.classList.contains('guides'))); } },
     'jana-qr': function (el) { janaQrBaru(el.dataset.id); },
@@ -2538,11 +2581,12 @@
     'ax-pilih': function (el) { closeSheet(); setHadir(el.dataset.id, el.dataset.hadir === '1', el.dataset.sebab || null); },
     'senarai-murid': function (el) { sheetMurid(el.dataset.id, !!el.dataset.cari); },
     'profil-murid': function (el) { go('#/murid/' + el.dataset.id); },
-    'tdk-kelas': function (el) { S.kelasTerakhir = el.dataset.id; S.tdk = null; muatTindakan(location.hash.split('/')[2], el.dataset.id); },
+    'tdk-kelas': function (el) { if (!tinggalTdk()) return; S.kelasTerakhir = el.dataset.id; S.tdk = null; muatTindakan(location.hash.split('/')[2], el.dataset.id); },
     'tdk-hadir': function (el) { var on = el.getAttribute('aria-pressed') === 'true'; if (on) return; tdkHadir(el.dataset.v === '1', null); },
     'tdk-sebab': function (el) { var h = S.tdk.hadir; tdkHadir(false, h && h.sebab === el.dataset.v ? null : el.dataset.v); },
     'tdk-tg': function (el) { tdkTugasan(el.dataset.id, el.dataset.v === '1'); },
     'tdk-tp': function (el) { tdkTp(+el.dataset.v); },
+    'tdk-simpan': function () { simpanTdk(); },
     'catatan-padam': async function (el) {
       if (!confirm('Padam catatan ini? Tidak boleh dikembalikan.')) return;
       var r = await sb.from('catatan').delete().eq('id', el.dataset.id);
@@ -2783,6 +2827,7 @@
       if (ev === 'SIGNED_IN' && (session && session.user.id) !== sebelum) { S.profil = null; S.loaded = false; setTimeout(route, 0); }
     });
     window.addEventListener('hashchange', route);
+    window.addEventListener('beforeunload', function (e) { if (S.tdk && kiraUbahTdk()) { e.preventDefault(); e.returnValue = ''; } });
     route();
     semakVersi();
   }
