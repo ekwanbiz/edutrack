@@ -12,7 +12,7 @@
   var $toast = document.getElementById('toast');
 
   /* Nombor versi app. Naikkan SERENTAK dengan version.json dan CACHE dalam sw.js. */
-  var VERSI = '22';
+  var VERSI = '23';
 
   var S = { session: null, profil: null, kelas: [], murid: [], loaded: false, q: '', authTab: 'masuk', recovery: false, scanner: null };
 
@@ -209,12 +209,12 @@
   }
 
   var MODUL = [
-    { id: 'attendx', nama: 'AttendX', desc: 'Rekod kehadiran', },
-    { id: 'tasktrack', nama: 'TaskTrack', desc: 'Kerja rumah · kutip buku', },
-    { id: 'assessment', nama: 'Assessment', desc: 'PBD · kuiz · peperiksaan', },
-    { id: 'profil', nama: 'Student Profile', desc: 'Profil murid · QR' },
-    { id: 'analisis', nama: 'Analysis', desc: 'Statistik · laporan', },
-    { id: 'urus', nama: 'Manage', desc: 'Murid kelas ini · QR' }
+    { id: 'attendx', nama: 'Kehadiran', desc: 'Rekod kehadiran', },
+    { id: 'tasktrack', nama: 'Buku', desc: 'Kerja rumah · kutip buku', },
+    { id: 'assessment', nama: 'Penilaian', desc: 'PBD · kuiz · peperiksaan', },
+    { id: 'profil', nama: 'Murid', desc: 'Profil murid · QR' },
+    { id: 'analisis', nama: 'Report', desc: 'Statistik · laporan', },
+    { id: 'urus', nama: 'Setting', desc: 'Murid kelas ini · QR' }
   ];
 
   /* ---------- Sheet ---------- */
@@ -708,12 +708,12 @@
       '<div class="between"><h2>Murid ' + esc(k.nama) + ' <span style="color:var(--acc)" data-bil>(' + bilMurid(k.id) + ')</span></h2><button class="icon-sm" data-act="sheet-close" aria-label="Tutup senarai">' + I.close + '</button></div>' +
       '<label class="search" style="box-shadow:none;background:var(--soft)">' + I.search + '<span class="sr">Cari nama murid</span><input type="search" data-input="cari-murid" data-id="' + k.id + '" placeholder="Cari nama murid" autocomplete="off"></label>' +
       '<div class="sheet-scroll" data-murid-list>' + senaraiMuridHtml(k.id, '') + '</div>' +
-      '<a class="btn secondary block" href="#/urus/kelas/' + k.id + '">Manage murid kelas ini</a>',
+      '<a class="btn secondary block" href="#/urus/kelas/' + k.id + '">Setting murid kelas ini</a>',
       { tall: true, label: 'Senarai murid', focus: fokusCari ? 'input[data-input=cari-murid]' : null });
   }
   function senaraiMuridHtml(kelasId, q) {
     var list = muridKelas(kelasId).filter(function (m) { return !q || m.nama.toLowerCase().indexOf(q.toLowerCase()) >= 0; });
-    if (!list.length) return '<p class="sub" style="padding:12px 2px">' + (q ? 'Tiada murid sepadan.' : 'Belum ada murid. Tambah murid melalui Manage.') + '</p>';
+    if (!list.length) return '<p class="sub" style="padding:12px 2px">' + (q ? 'Tiada murid sepadan.' : 'Belum ada murid. Tambah murid melalui Setting.') + '</p>';
     return list.map(function (m, i) {
       return '<button class="list-row" data-act="profil-murid" data-id="' + m.id + '"><span style="width:24px;font-size:12px;font-weight:700;color:var(--muted)">' + (m.no || i + 1) + '</span><span class="murid-av" style="width:36px;height:36px;font-size:13px">' + esc(inisial(m.nama)) + '</span><span class="grow" style="font-size:15px;font-weight:600">' + esc(m.nama) + '</span><span class="muted">' + I.chev + '</span></button>';
     }).join('');
@@ -728,7 +728,7 @@
     var hari = hariIni();
     var t = /^\d{4}-\d{2}-\d{2}$/.test(tarikh || '') ? tarikh : hari;
     if (t > hari) t = hari;
-    $app.innerHTML = '<div class="page"><div class="row"><a class="icon-btn" href="#/kelas/' + k.id + '" aria-label="Kembali">' + I.back + '</a><div class="row" style="gap:10px">' + logo('attendx', 40) + '<div><h2>AttendX</h2><span class="sub">' + esc(k.nama + (k.subjek ? ' · ' + k.subjek : '')) + '</span></div></div></div><p class="sub">Memuatkan…</p></div>';
+    $app.innerHTML = '<div class="page"><div class="row"><a class="icon-btn" href="#/kelas/' + k.id + '" aria-label="Kembali">' + I.back + '</a><div class="row" style="gap:10px">' + logo('attendx', 40) + '<div><h2>Kehadiran</h2><span class="sub">' + esc(k.nama + (k.subjek ? ' · ' + k.subjek : '')) + '</span></div></div></div><p class="sub">Memuatkan…</p></div>';
     var res = await Promise.all([
       sb.from('kehadiran').select('murid_id,hadir,sebab').eq('kelas_id', k.id).eq('tarikh', t),
       sb.rpc('ringkasan_kehadiran', { p_kelas: k.id, p_had: 30 })
@@ -756,7 +756,7 @@
     var tak = murid.filter(function (m) { return ax.rows[m.id] && ax.rows[m.id].hadir === false; }).length;
     var lepas = tambahHari(ax.tarikh, -1), depan = tambahHari(ax.tarikh, 1);
     $app.innerHTML = '<div class="page">' +
-      '<div class="row"><a class="icon-btn" href="#/kelas/' + k.id + '" aria-label="Kembali">' + I.back + '</a><div class="row" style="gap:10px">' + logo('attendx', 40) + '<div><h2>AttendX</h2><span class="sub">' + esc(k.nama + (k.subjek ? ' · ' + k.subjek : '')) + '</span></div></div></div>' +
+      '<div class="row"><a class="icon-btn" href="#/kelas/' + k.id + '" aria-label="Kembali">' + I.back + '</a><div class="row" style="gap:10px">' + logo('attendx', 40) + '<div><h2>Kehadiran</h2><span class="sub">' + esc(k.nama + (k.subjek ? ' · ' + k.subjek : '')) + '</span></div></div></div>' +
       '<div data-outbox>' + htmlOutbox() + '</div>' +
       (ax.luar ? '<div class="card luar-nota">' + (ax.tahu ? 'Tiada internet. Rekod disimpan dalam telefon dan dihantar automatik bila ada isyarat.' : '<b>Tiada internet</b> dan rekod tarikh ini belum pernah dibuka di telefon ini. Jika kehadiran hari ini sudah direkod sebelum ini (di telefon lain), tunggu ada internet supaya rekod itu tidak tertindih.') + '</div>' : '') +
 
@@ -958,14 +958,14 @@
     pref.set('tt_tab', tab);
     var hash = location.hash, kt = kataTT(tab);
     var tabs = '<div class="seg"><button data-act="tt-tab" data-id="' + k.id + '" data-tab="kr" aria-pressed="' + (tab === 'kr') + '">Kerja rumah</button><button data-act="tt-tab" data-id="' + k.id + '" data-tab="buku" aria-pressed="' + (tab === 'buku') + '">Kutip buku</button></div>';
-    $app.innerHTML = '<div class="page">' + kepalaModul(k, 'tasktrack', 'TaskTrack') + tabs + '<p class="sub">Memuatkan…</p></div>';
+    $app.innerHTML = '<div class="page">' + kepalaModul(k, 'tasktrack', 'Buku') + tabs + '<p class="sub">Memuatkan…</p></div>';
     var r = await sb.rpc('ringkasan_tugasan', { p_kelas: k.id, p_had: 100, p_jenis: tab });
     var luar = !!(r.error && rangkaianGagal(r.error)), cKey = 'et_cache_ttl_' + uid() + '_' + k.id + '_' + tab;
     if (r.error && !luar) throw r.error;
     if (location.hash !== hash) return;
     var bil = muridKelas(k.id).length, list = luar ? bacaLS(cKey, []) : (r.data || []);
     if (!luar) simpanLS(cKey, list.slice(0, 30));
-    $app.innerHTML = '<div class="page">' + kepalaModul(k, 'tasktrack', 'TaskTrack') + tabs +
+    $app.innerHTML = '<div class="page">' + kepalaModul(k, 'tasktrack', 'Buku') + tabs +
       '<div data-outbox>' + htmlOutbox() + '</div>' +
       (luar ? '<div class="card luar-nota">Tiada internet. Senarai ini salinan terakhir dalam telefon; ' + (tab === 'buku' ? 'kutip buku' : 'kerja rumah') + ' baharu perlu internet.</div>' : '') +
       (tab === 'buku'
@@ -1046,7 +1046,7 @@
   async function renderTugasan(kelasId, tugasanId) {
     var k = cariKelas(kelasId);
     if (!k) return go('#/');
-    $app.innerHTML = '<div class="page">' + kepalaModul(k, 'tasktrack', 'TaskTrack', '#/modul/tasktrack/' + k.id + '/' + pref.get('tt_tab', 'kr')) + '<p class="sub">Memuatkan…</p></div>';
+    $app.innerHTML = '<div class="page">' + kepalaModul(k, 'tasktrack', 'Buku', '#/modul/tasktrack/' + k.id + '/' + pref.get('tt_tab', 'kr')) + '<p class="sub">Memuatkan…</p></div>';
     var ada = await muatTugasan(k.id, tugasanId);
     if (location.hash !== '#/modul/tasktrack/' + k.id + '/' + tugasanId) return;
     if (!ada) { toast('Tugasan tidak dijumpai.'); return go('#/modul/tasktrack/' + k.id); }
@@ -1061,7 +1061,7 @@
 
   function lukisTugasan() {
     var tt = S.tt, k = cariKelas(tt.kelasId), c = kiraTT(), kt = kataTT(tt.tugasan.jenis), balik = '#/modul/tasktrack/' + k.id + '/' + (tt.tugasan.jenis || 'kr');
-    $app.innerHTML = '<div class="page">' + kepalaModul(k, 'tasktrack', 'TaskTrack', balik) +
+    $app.innerHTML = '<div class="page">' + kepalaModul(k, 'tasktrack', 'Buku', balik) +
       '<div data-outbox>' + htmlOutbox() + '</div>' +
       (tt.luar ? '<div class="card luar-nota">Tiada internet. Tanda disimpan dalam telefon dan dihantar automatik bila ada isyarat.</div>' : '') +
       '<div class="card between" style="padding:12px 14px;gap:8px"><div class="grow" style="min-width:0"><b style="display:block;font-size:16px">' + esc(tt.tugasan.tajuk) + '</b><span class="sub">' + kt.label + ' · ' + esc(labelTarikh(tt.tugasan.tarikh, true)) + '</span></div>' +
@@ -1215,7 +1215,7 @@
     var tabs = '<div class="seg">' + [['pbd', 'PBD'], ['kuiz', 'Kuiz'], ['peperiksaan', 'Peperiksaan']].map(function (t) {
       return '<button data-act="as-tab" data-id="' + k.id + '" data-tab="' + t[0] + '" aria-pressed="' + (t[0] === tab) + '">' + t[1] + '</button>';
     }).join('') + '</div>';
-    $app.innerHTML = '<div class="page">' + kepalaModul(k, 'assessment', 'Assessment') + tabs + '<p class="sub">Memuatkan…</p></div>';
+    $app.innerHTML = '<div class="page">' + kepalaModul(k, 'assessment', 'Penilaian') + tabs + '<p class="sub">Memuatkan…</p></div>';
     var bil = muridKelas(k.id).length, body;
     if (tab === 'pbd') {
       var r = await sb.rpc('ringkasan_pbd', { p_kelas: k.id });
@@ -1239,7 +1239,7 @@
         }).join('') + '</div>' : '<div class="card empty"><p class="sub">Belum ada ' + JENIS[tab].toLowerCase() + '.</p></div>');
     }
     if (location.hash !== hash) return;
-    $app.innerHTML = '<div class="page">' + kepalaModul(k, 'assessment', 'Assessment') + tabs + body + '</div>';
+    $app.innerHTML = '<div class="page">' + kepalaModul(k, 'assessment', 'Penilaian') + tabs + body + '</div>';
   }
 
   function sheetTulisBab(kelasId) {
@@ -1376,7 +1376,7 @@
     var k = cariKelas(kelasId);
     if (!k) return go('#/');
     var hash = location.hash;
-    $app.innerHTML = '<div class="page">' + kepalaModul(k, 'assessment', 'Assessment', '#/modul/assessment/' + k.id) + '<p class="sub">Memuatkan…</p></div>';
+    $app.innerHTML = '<div class="page">' + kepalaModul(k, 'assessment', 'Penilaian', '#/modul/assessment/' + k.id) + '<p class="sub">Memuatkan…</p></div>';
     var res = await Promise.all([
       sb.from('penilaian').select('id,kelas_id,jenis,tajuk,markah_penuh,tarikh').eq('id', id).maybeSingle(),
       sb.from('markah').select('murid_id,markah').eq('penilaian_id', id)
@@ -1576,7 +1576,7 @@
     var tabs = '<div class="seg">' + Object.keys(TEMPOH).map(function (t) {
       return '<button data-act="an-tempoh" data-id="' + k.id + '" data-t="' + t + '" aria-pressed="' + (t === tempoh) + '">' + TEMPOH[t] + '</button>';
     }).join('') + '</div>';
-    var kepala = kepalaModul(k, 'analisis', 'Analysis');
+    var kepala = kepalaModul(k, 'analisis', 'Report');
     $app.innerHTML = '<div class="page">' + kepala + tabs + '<p class="sub">Memuatkan…</p></div>';
     var an = await muatAnalisis(k, tempoh);
     if (location.hash !== hash) return;
@@ -2028,7 +2028,7 @@
     if (!k) return go('#/urus');
     var murid = muridKelas(k.id);
     $app.innerHTML = '<div class="page">' +
-      '<div class="row"><a class="icon-btn" href="#/kelas/' + k.id + '" aria-label="Kembali ke ' + esc(k.nama) + '">' + I.back + '</a><div class="row" style="gap:10px">' + logo('urus', 40) + '<div><h2>Manage ' + esc(k.nama) + '</h2><span class="sub">' + esc(k.subjek || '') + '</span></div></div></div>' +
+      '<div class="row"><a class="icon-btn" href="#/kelas/' + k.id + '" aria-label="Kembali ke ' + esc(k.nama) + '">' + I.back + '</a><div class="row" style="gap:10px">' + logo('urus', 40) + '<div><h2>Setting ' + esc(k.nama) + '</h2><span class="sub">' + esc(k.subjek || '') + '</span></div></div></div>' +
 
       '<span class="section-title">Maklumat kelas</span>' +
       '<form class="card stack" style="padding:16px;gap:12px" data-form="kelas-edit" data-id="' + k.id + '" novalidate>' +
@@ -2234,7 +2234,7 @@
     var links = (m.kelas_murid || []).map(function (l) { return { k: cariKelas(l.kelas_id), no: l.no_giliran }; }).filter(function (x) { return x.k; });
     var w = warna(links.length ? links[0].k.warna : 3);
     $app.innerHTML = '<div class="page">' +
-      '<div class="row"><button class="icon-btn" data-act="back" aria-label="Kembali">' + I.back + '</button><div class="row" style="gap:10px">' + logo('profil', 40) + '<h2>Student Profile</h2></div></div>' +
+      '<div class="row"><button class="icon-btn" data-act="back" aria-label="Kembali">' + I.back + '</button><div class="row" style="gap:10px">' + logo('profil', 40) + '<h2>Murid</h2></div></div>' +
       '<div class="card profil-head">' +
         '<span class="profil-av" style="background:' + w.g + '">' + esc(inisial(m.nama)) + '</span>' +
         '<h1 style="font-size:22px">' + esc(m.nama) + '</h1>' +
@@ -2250,9 +2250,9 @@
       '</div>' +
       '<span class="section-title">Rekod</span>' +
       '<div class="card list-card">' +
-        '<div class="list-item" style="align-items:flex-start">' + logo('attendx', 36) + '<span class="grow" data-prof-hadir><b style="display:block">AttendX</b><span class="sub">Memuatkan…</span></span></div>' +
-        '<div class="list-item" style="align-items:flex-start">' + logo('tasktrack', 36) + '<span class="grow" data-prof-kr><b style="display:block">TaskTrack</b><span class="sub">Memuatkan…</span></span></div>' +
-        '<div class="list-item" style="align-items:flex-start">' + logo('assessment', 36) + '<span class="grow" data-prof-as><b style="display:block">Assessment</b><span class="sub">Memuatkan…</span></span></div>' +
+        '<div class="list-item" style="align-items:flex-start">' + logo('attendx', 36) + '<span class="grow" data-prof-hadir><b style="display:block">Kehadiran</b><span class="sub">Memuatkan…</span></span></div>' +
+        '<div class="list-item" style="align-items:flex-start">' + logo('tasktrack', 36) + '<span class="grow" data-prof-kr><b style="display:block">Buku</b><span class="sub">Memuatkan…</span></span></div>' +
+        '<div class="list-item" style="align-items:flex-start">' + logo('assessment', 36) + '<span class="grow" data-prof-as><b style="display:block">Penilaian</b><span class="sub">Memuatkan…</span></span></div>' +
       '</div>' +
       (links.length ? '<button class="btn secondary block" data-act="kongsi-murid" data-id="' + m.id + '">' + I.share + ' Kongsi ringkasan kepada ibu bapa</button>' : '') +
       '<span class="section-title">QR murid</span>' +
@@ -2328,13 +2328,13 @@
     box.innerHTML = '<div class="card stack tdk" style="padding:14px 16px;gap:12px">' +
       '<div class="between"><b style="font-size:16px">Tindakan</b>' + (links.length > 1 ? '' : '<span class="sub">' + esc(k.nama + (k.subjek ? ' · ' + k.subjek : '')) + '</span>') + '</div>' +
       (links.length > 1 ? '<div class="row" style="gap:6px;flex-wrap:wrap">' + links.map(function (x) { return '<button class="chip tdk-kelas' + (x.id === k.id ? ' on' : '') + '" data-act="tdk-kelas" data-id="' + x.id + '">' + esc(x.nama + (x.subjek ? ' · ' + x.subjek : '')) + '</button>'; }).join('') + '</div>' : '') +
-      '<p class="sub" style="margin:-6px 0 0">Untuk murid ini sahaja. Untuk seluruh kelas, guna <b>Assessment</b> / <b>TaskTrack</b>.</p>' +
+      '<p class="sub" style="margin:-6px 0 0">Untuk murid ini sahaja. Untuk seluruh kelas, guna <b>Penilaian</b> / <b>Buku</b>.</p>' +
       (t.luar ? '<div class="luar-nota" style="padding:8px 10px">Tiada internet: tanda kerja rumah disimpan dalam telefon; PBD perlu internet.</div>' : '') +
       '<div class="stack" style="gap:6px"><span class="tdk-h">PBD</span>' +
         (t.bab.length ? '<select class="input" data-input="tdk-bab" aria-label="Pilih Bab">' + t.bab.map(function (b) { return '<option value="' + b.id + '"' + (b.id === t.babPilih ? ' selected' : '') + '>' + esc(b.tajuk) + (t.tp[b.id] ? ' — TP' + t.tp[b.id] : '') + '</option>'; }).join('') + '</select>' +
           '<div class="tp-pilih">' + [1, 2, 3, 4, 5, 6].map(function (n) { var on = bab && t.tp[bab.id] === n, w = TP_WARNA[n]; return '<button class="tp-btn" data-act="tdk-tp" data-v="' + n + '" aria-pressed="' + on + '" style="background:' + w[0] + ';color:' + w[1] + '"><b>TP' + n + '</b></button>'; }).join('') + '</div>' +
           '<span class="sub">Tekan TP yang sama sekali lagi untuk padam.</span>'
-        : '<p class="sub" style="margin:0">Belum ada Bab untuk subjek ini. Tulis Bab dalam Assessment.</p>') +
+        : '<p class="sub" style="margin:0">Belum ada Bab untuk subjek ini. Tulis Bab dalam Penilaian.</p>') +
       '</div>' +
       '<div class="stack" style="gap:6px"><span class="tdk-h">Kerja rumah</span>' + senaraiTugasan('kr') + '</div>' +
       butangSimpanTdk() +
@@ -2443,16 +2443,16 @@
     var r = await sb.from('kehadiran').select('kelas_id,tarikh,hadir,sebab').eq('murid_id', muridId).order('tarikh', { ascending: false }).limit(1000);
     var el = $app.querySelector('[data-prof-hadir]');
     if (!el) return;
-    if (r.error) { el.innerHTML = '<b style="display:block">AttendX</b><span class="error">' + esc(errMsg(r.error)) + '</span>'; return; }
+    if (r.error) { el.innerHTML = '<b style="display:block">Kehadiran</b><span class="error">' + esc(errMsg(r.error)) + '</span>'; return; }
     var data = r.data || [];
-    if (!data.length) { el.innerHTML = '<b style="display:block">AttendX</b><span class="sub">Belum ada rekod kehadiran.</span>'; return; }
+    if (!data.length) { el.innerHTML = '<b style="display:block">Kehadiran</b><span class="sub">Belum ada rekod kehadiran.</span>'; return; }
     var perKelas = links.map(function (x) {
       var d = data.filter(function (h) { return h.kelas_id === x.k.id; });
       var hadir = d.filter(function (h) { return h.hadir; }).length;
       return { k: x.k, jumlah: d.length, hadir: hadir };
     }).filter(function (x) { return x.jumlah > 0; });
     var tak = data.filter(function (h) { return !h.hadir; }).slice(0, 5);
-    el.innerHTML = '<b style="display:block">AttendX</b>' +
+    el.innerHTML = '<b style="display:block">Kehadiran</b>' +
       perKelas.map(function (x) {
         var pct = Math.round(x.hadir / x.jumlah * 100);
         return '<span class="sub" style="display:block">' + esc(x.k.nama + (x.k.subjek ? ' · ' + x.k.subjek : '')) + ': <b style="color:' + (pct < 80 ? 'var(--danger)' : 'var(--ok)') + '">' + pct + '%</b> (' + x.hadir + '/' + x.jumlah + ')</span>';
@@ -2464,18 +2464,18 @@
     var r = await sb.from('status_tugasan').select('siap,tugasan(tajuk,tarikh,kelas_id,jenis)').eq('murid_id', muridId).limit(1000);
     var el = $app.querySelector('[data-prof-kr]');
     if (!el) return;
-    if (r.error) { el.innerHTML = '<b style="display:block">TaskTrack</b><span class="error">' + esc(errMsg(r.error)) + '</span>'; return; }
+    if (r.error) { el.innerHTML = '<b style="display:block">Buku</b><span class="error">' + esc(errMsg(r.error)) + '</span>'; return; }
     var semua = (r.data || []).filter(function (x) { return x.tugasan; });
     var data = semua.filter(function (x) { return x.tugasan.jenis !== 'buku'; });
     var bukuTak = semua.filter(function (x) { return x.tugasan.jenis === 'buku' && !x.siap; }).sort(function (a, b) { return a.tugasan.tarikh < b.tugasan.tarikh ? 1 : -1; });
     var nBuku = bukuTak.length ? '<span class="sub" style="display:block;margin-top:6px"><b>Buku tidak hantar:</b> ' + bukuTak.slice(0, 5).map(function (h) { return esc(h.tugasan.tajuk); }).join(', ') + (bukuTak.length > 5 ? ' dan ' + (bukuTak.length - 5) + ' lagi' : '') + '</span>' : '';
-    if (!data.length) { el.innerHTML = '<b style="display:block">TaskTrack</b><span class="sub">Belum ada rekod kerja rumah.</span>' + nBuku; return; }
+    if (!data.length) { el.innerHTML = '<b style="display:block">Buku</b><span class="sub">Belum ada rekod kerja rumah.</span>' + nBuku; return; }
     var perKelas = links.map(function (x) {
       var d = data.filter(function (h) { return h.tugasan.kelas_id === x.k.id; });
       return { k: x.k, jumlah: d.length, siap: d.filter(function (h) { return h.siap; }).length };
     }).filter(function (x) { return x.jumlah > 0; });
     var tak = data.filter(function (h) { return !h.siap; }).sort(function (a, b) { return a.tugasan.tarikh < b.tugasan.tarikh ? 1 : -1; });
-    el.innerHTML = '<b style="display:block">TaskTrack</b>' +
+    el.innerHTML = '<b style="display:block">Buku</b>' +
       perKelas.map(function (x) {
         return '<span class="sub" style="display:block">' + esc(x.k.nama + (x.k.subjek ? ' · ' + x.k.subjek : '')) + ': <b>' + x.siap + '/' + x.jumlah + '</b> siap</span>';
       }).join('') +
@@ -2490,11 +2490,11 @@
     var el = $app.querySelector('[data-prof-as]');
     if (!el) return;
     var e = res[0].error || res[1].error;
-    if (e) { el.innerHTML = '<b style="display:block">Assessment</b><span class="error">' + esc(errMsg(e)) + '</span>'; return; }
+    if (e) { el.innerHTML = '<b style="display:block">Penilaian</b><span class="error">' + esc(errMsg(e)) + '</span>'; return; }
     var tp = (res[0].data || []).filter(function (x) { return x.pbd_item; }).sort(function (a, b) { return a.pbd_item.urutan - b.pbd_item.urutan; });
     var mk = (res[1].data || []).filter(function (x) { return x.penilaian; }).sort(function (a, b) { return a.penilaian.tarikh < b.penilaian.tarikh ? 1 : -1; });
-    if (!tp.length && !mk.length) { el.innerHTML = '<b style="display:block">Assessment</b><span class="sub">Belum ada rekod PBD atau markah.</span>'; return; }
-    el.innerHTML = '<b style="display:block">Assessment</b>' +
+    if (!tp.length && !mk.length) { el.innerHTML = '<b style="display:block">Penilaian</b><span class="sub">Belum ada rekod PBD atau markah.</span>'; return; }
+    el.innerHTML = '<b style="display:block">Penilaian</b>' +
       (tp.length ? '<div class="row" style="gap:6px;flex-wrap:wrap;margin-top:4px">' + tp.map(function (x) {
         var w = TP_WARNA[x.tp];
         return '<span class="chip" style="background:' + w[0] + ';color:' + w[1] + '" title="' + esc(x.pbd_item.tajuk) + '">' + esc(x.pbd_item.tajuk.length > 22 ? x.pbd_item.tajuk.slice(0, 21) + '…' : x.pbd_item.tajuk) + ' · TP' + x.tp + '</span>';
@@ -2551,7 +2551,7 @@
     'cetak': function () { cetakSekarang(); },
     'garis-panduan': function (el) { var w = $app.querySelector('.preview-wrap'); if (w) { w.classList.toggle('guides'); el.setAttribute('aria-pressed', String(w.classList.contains('guides'))); } },
     'jana-qr': function (el) { janaQrBaru(el.dataset.id); },
-    'alert': function () { toast('Akan aktif selepas modul TaskTrack siap.'); },
+    'alert': function () { toast('Akan aktif selepas modul Buku siap.'); },
     'alert-lama': function (el) { sheetLamaTakHadir(el.dataset.id); },
     'alert-kr': function (el) { sheetKrTertunggak(el.dataset.id); },
     'an-tempoh': function (el) { location.replace('#/modul/analisis/' + el.dataset.id + '/' + el.dataset.t); },
