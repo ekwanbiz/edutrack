@@ -12,7 +12,7 @@
   var $toast = document.getElementById('toast');
 
   /* Nombor versi app. Naikkan SERENTAK dengan version.json dan CACHE dalam sw.js. */
-  var VERSI = '20';
+  var VERSI = '21';
 
   var S = { session: null, profil: null, kelas: [], murid: [], loaded: false, q: '', authTab: 'masuk', recovery: false, scanner: null };
 
@@ -214,7 +214,7 @@
     { id: 'assessment', nama: 'Assessment', desc: 'PBD · kuiz · peperiksaan', },
     { id: 'profil', nama: 'Student Profile', desc: 'Profil murid · QR' },
     { id: 'analisis', nama: 'Analysis', desc: 'Statistik · laporan', },
-    { id: 'urus', nama: 'Manage', desc: 'Murid · kelas · QR' }
+    { id: 'urus', nama: 'Manage', desc: 'Murid kelas ini · QR' }
   ];
 
   /* ---------- Sheet ---------- */
@@ -307,15 +307,26 @@
     if (baki.length !== ob.length) tulisOutbox(baki);
   }
   var maklumLuar = false;
+  // Satu tanda simpan yang SAMA untuk semua modul (versi 21): pil kecil di atas skrin.
+  var tandaPemasa;
+  function tandaDisimpan(luar) {
+    var el = document.getElementById('tanda-simpan');
+    if (!el) { el = document.createElement('div'); el.id = 'tanda-simpan'; el.setAttribute('role', 'status'); document.body.appendChild(el); }
+    el.textContent = luar ? '⏳ Disimpan dalam telefon' : '✓ Disimpan';
+    el.className = 'tunjuk' + (luar ? ' luar' : '');
+    clearTimeout(tandaPemasa); tandaPemasa = setTimeout(function () { el.className = ''; }, 1400);
+  }
+
   async function simpanRekod(t, rows) {
     var mula = Date.now();
-    if (navigator.onLine === false) return masukOutbox(t, rows) ? { luar: true } : { error: { message: 'Storan telefon penuh. Rekod tidak disimpan.' } };
+    if (navigator.onLine === false) return masukOutbox(t, rows) ? (tandaDisimpan(true), { luar: true }) : { error: { message: 'Storan telefon penuh. Rekod tidak disimpan.' } };
     var r = await sb.from(t).upsert(rows, { onConflict: JADUAL_LUAR[t] });
-    if (r.error && rangkaianGagal(r.error)) return masukOutbox(t, rows) ? { luar: true } : { error: r.error };
+    if (r.error && rangkaianGagal(r.error)) return masukOutbox(t, rows) ? (tandaDisimpan(true), { luar: true }) : { error: r.error };
     if (r.error) return { error: r.error };
     var d = {}; rows.forEach(function (x) { d[kunciBaris(t, x)] = mula; });
     keluarkanOutbox(d); // rekod lama dalam peti untuk murid yang sama sudah tidak relevan
     kemasPetunjukOutbox();
+    tandaDisimpan();
     return { ok: true };
   }
   function maklumLuarTalian(res) {
@@ -547,9 +558,9 @@
     return '<div class="between">' +
       '<div class="brand"><span class="brand-mark">' + I.mark + '</span><span class="brand-name">Edu<b>Track</b></span></div>' +
       '<div class="row" style="gap:8px">' +
-        '<button class="icon-btn" data-act="mod" aria-label="' + (isMod('dark') ? 'Tukar ke mod cerah' : 'Tukar ke mod gelap') + '">' + (isMod('dark') ? I.sun : I.moon) + '</button>' +
-        '<button class="icon-btn" data-act="tema" aria-label="Pilih tema">' + I.palette + '</button>' +
-        '<a class="avatar-btn" href="#/urus" aria-label="Akaun dan Manage">' + esc(inisial(S.profil.nama)) + '</a>' +
+        '<button class="icon-btn" data-act="mod" title="Mod cerah / gelap" aria-label="' + (isMod('dark') ? 'Tukar ke mod cerah' : 'Tukar ke mod gelap') + '">' + (isMod('dark') ? I.sun : I.moon) + '</button>' +
+        '<button class="icon-btn" data-act="tema" title="Pilih tema warna" aria-label="Pilih tema">' + I.palette + '</button>' +
+        '<a class="avatar-btn" href="#/urus" aria-label="Akaun saya" title="Akaun saya">' + esc(inisial(S.profil.nama)) + '</a>' +
       '</div></div>';
   }
 
@@ -566,7 +577,7 @@
       '<label class="search">' + I.search + '<span class="sr">Cari murid atau kelas</span><input type="search" data-input="cari" placeholder="Cari murid atau kelas" value="' + esc(S.q) + '" autocomplete="off"></label>' +
       '<div class="between"><span class="sub">' + S.kelas.length + ' kelas · ' + muridAktif().length + ' murid</span>' + savedChip() + '</div>' +
       '<div class="stack" data-home-list>' + homeList() + '</div>' +
-      '<div class="scan-wrap"><button class="scan-btn" data-act="scan">' + I.qr + 'Scan QR murid</button></div>' +
+      '<div class="scan-wrap"><button class="scan-btn" data-act="scan">' + I.qr + 'Scan profil murid</button></div>' +
     '</div>';
   }
 
@@ -661,7 +672,7 @@
         if (m.id === 'profil') return '<button class="modul" data-act="senarai-murid" data-id="' + k.id + '">' + inner + '</button>';
         return '<a class="modul" href="#/modul/' + m.id + '/' + k.id + '">' + inner + '</a>';
       }).join('') + '</div>' +
-      '<div class="scan-wrap"><button class="scan-btn" data-act="scan">' + I.qr + 'Scan QR murid</button></div>' +
+      '<div class="scan-wrap"><button class="scan-btn" data-act="scan">' + I.qr + 'Scan profil murid</button></div>' +
     '</div>';
     muatLamaTakHadir(k.id);
     muatKrTertunggak(k.id);
@@ -1062,9 +1073,9 @@
       (c.murid.length
         ? '<div class="tt-aksi">' +
             (c.kosong ? '<button class="btn" data-act="tt-semua" data-tt-semua>' + I.check + (c.mula ? ' Baki ' + kt.semua.toLowerCase() : ' ' + kt.semua) + '</button>' : '') +
-            (tt.tugasan.jenis === 'buku' ? '<button class="btn secondary" data-act="tt-kutip">' + I.qr.replace(/width="34" height="34"/, 'width="22" height="22"') + ' Scan buku</button>' : '') +
+            (tt.tugasan.jenis === 'buku' ? '<button class="btn secondary" data-act="tt-kutip">' + I.qr.replace(/width="34" height="34"/, 'width="22" height="22"') + ' Scan kutip buku</button>' : '') +
           '</div>' +
-          '<p class="sub" style="margin:0">' + (c.mula ? 'Tekan nama murid untuk tukar <b>' + kt.ya + ' / ' + kt.tak + '</b>.' : (tt.tugasan.jenis === 'buku' ? 'Tekan <b>Scan buku</b> untuk scan buku yang dihantar, atau <b>Semua hantar</b> lalu tekan nama yang tidak hantar.' : 'Tekan <b>Semua siap</b>, kemudian tekan nama murid yang tidak siap.')) + '</p>' +
+          '<p class="sub" style="margin:0">' + (c.mula ? 'Tekan nama murid untuk tukar <b>' + kt.ya + ' / ' + kt.tak + '</b>.' : (tt.tugasan.jenis === 'buku' ? 'Tekan <b>Scan kutip buku</b> untuk scan buku yang dihantar, atau <b>Semua hantar</b> lalu tekan nama yang tidak hantar.' : 'Tekan <b>Semua siap</b>, kemudian tekan nama murid yang tidak siap.')) + '</p>' +
           '<div class="ax-grid' + (c.mula ? '' : ' belum') + '" data-tt-grid>' + gridTugasan(c.murid) + '</div>'
         : '<div class="card empty"><p class="sub">Belum ada murid dalam kelas ini.</p><a class="btn" href="#/urus/kelas/' + k.id + '">Tambah murid</a></div>') +
     '</div>';
@@ -1098,7 +1109,7 @@
     if (!el || !S.tt) return;
     var c = kiraTT(), id = el.dataset.ttMurid, v = S.tt.rows[id];
     if (!c.mula) {
-      toast(S.tt.tugasan.jenis === 'buku' ? 'Tekan "Scan buku" atau "Semua hantar" dahulu.' : 'Tekan "Semua siap" dahulu.');
+      toast(S.tt.tugasan.jenis === 'buku' ? 'Tekan "Scan kutip buku" atau "Semua hantar" dahulu.' : 'Tekan "Semua siap" dahulu.');
       var b = $app.querySelector('[data-tt-semua]');
       if (b) { b.classList.remove('goyang'); void b.offsetWidth; b.classList.add('goyang'); }
       return;
@@ -1308,6 +1319,7 @@
     var r2 = buang.length ? await sb.from('pbd_tp').delete().eq('item_id', p.item.id).in('murid_id', buang) : { error: null };
     var e = r1.error || r2.error;
     if (e) { p.rows = sebelum; lukisPbd(); toast('Tidak disimpan: ' + errMsg(e)); }
+    else tandaDisimpan();
   }
 
   document.addEventListener('click', function (e) {
@@ -1477,7 +1489,7 @@
       n.rows[id] = v;
       var r = await sb.from('markah').upsert({ penilaian_id: n.p.id, murid_id: id, markah: v }, { onConflict: 'penilaian_id,murid_id' });
       if (r.error) { if (lama === undefined) delete n.rows[id]; else n.rows[id] = lama; input.value = lama === undefined ? '' : nomb(lama); toast('Tidak disimpan: ' + errMsg(r.error)); }
-      else { input.classList.add('ok'); setTimeout(function () { input.classList.remove('ok'); }, 900); }
+      else { input.classList.add('ok'); tandaDisimpan(); setTimeout(function () { input.classList.remove('ok'); }, 900); }
     }
     var st = $app.querySelector('[data-nilai-stat]'); if (st) st.innerHTML = statNilai();
     var gc = $app.querySelector('[data-gred-murid="' + id + '"]'); if (gc) gc.textContent = n.rows[id] !== undefined ? gredUntuk(n.rows[id] / pen * 100) : '';
@@ -1961,7 +1973,7 @@
   async function renderUrus() {
     var admin = S.profil.peranan === 'admin';
     $app.innerHTML = '<div class="page">' +
-      '<div class="row"><a class="icon-btn" href="#/" aria-label="Kembali ke halaman utama">' + I.back + '</a><div class="row" style="gap:10px">' + logo('urus', 40) + '<h2>Manage</h2></div></div>' +
+      '<div class="row"><a class="icon-btn" href="#/" aria-label="Kembali ke halaman utama">' + I.back + '</a><div class="row" style="gap:10px">' + logo('urus', 40) + '<h2>Akaun saya</h2></div></div>' +
       '<span class="section-title">Akaun</span>' +
       '<form class="card stack" style="padding:16px;gap:12px" data-form="akaun" novalidate>' +
         '<label class="field"><span>Nama</span><input class="input" name="nama" value="' + esc(S.profil.nama) + '"></label>' +
@@ -2194,7 +2206,7 @@
   function renderScan() {
     $app.innerHTML = '<div class="scan-page">' +
       '<video playsinline muted></video>' +
-      '<div class="scan-top"><button class="scan-btn-round" data-act="back" aria-label="Tutup scan">' + I.close + '</button><b>Scan QR murid</b><span style="width:44px"></span></div>' +
+      '<div class="scan-top"><button class="scan-btn-round" data-act="back" aria-label="Tutup scan">' + I.close + '</button><b>Scan profil murid</b><span style="width:44px"></span></div>' +
       '<div class="scan-frame" aria-hidden="true"></div>' +
       '<div class="scan-msg" data-scan-msg>Halakan kamera ke sticker QR pada buku</div>' +
     '</div>';
@@ -2337,6 +2349,7 @@
     box.innerHTML = '<div class="card stack tdk" style="padding:14px 16px;gap:12px">' +
       '<div class="between"><b style="font-size:16px">Tindakan</b>' + (links.length > 1 ? '' : '<span class="sub">' + esc(k.nama + (k.subjek ? ' · ' + k.subjek : '')) + '</span>') + '</div>' +
       (links.length > 1 ? '<div class="row" style="gap:6px;flex-wrap:wrap">' + links.map(function (x) { return '<button class="chip tdk-kelas' + (x.id === k.id ? ' on' : '') + '" data-act="tdk-kelas" data-id="' + x.id + '">' + esc(x.nama + (x.subjek ? ' · ' + x.subjek : '')) + '</button>'; }).join('') + '</div>' : '') +
+      '<p class="sub" style="margin:-6px 0 0">Untuk murid ini sahaja. Untuk seluruh kelas, guna <b>Assessment</b> / <b>TaskTrack</b>.</p>' +
       (t.luar ? '<div class="luar-nota" style="padding:8px 10px">Tiada internet: tanda kerja rumah disimpan dalam telefon; PBD perlu internet.</div>' : '') +
       '<div class="stack" style="gap:6px"><span class="tdk-h">PBD</span>' +
         (t.bab.length ? '<select class="input" data-input="tdk-bab" aria-label="Pilih Bab">' + t.bab.map(function (b) { return '<option value="' + b.id + '"' + (b.id === t.babPilih ? ' selected' : '') + '>' + esc(b.tajuk) + (t.tp[b.id] ? ' — TP' + t.tp[b.id] : '') + '</option>'; }).join('') + '</select>' +
@@ -2373,35 +2386,38 @@
     };
   }
   function kiraUbahTdk() { var u = ubahTdk(); return u.tp.length + u.st.length; }
-  function butangSimpanTdk() {
+  function butangSimpanTdk() { // baris status (simpan terus; butang hanya muncul jika gagal)
     var t = S.tdk, n = kiraUbahTdk();
-    if (t.sedang) return '<button class="btn block" disabled>Menyimpan…</button>';
-    if (n) return '<button class="btn block" data-act="tdk-simpan">Simpan (' + n + ' perubahan)</button>';
+    if (t.sedang) return '<div class="tdk-st">Menyimpan…</div>';
+    if (n) return '<button class="btn block" data-act="tdk-simpan">Cuba lagi (' + n + ' belum disimpan)</button>';
     if (t.disimpan) return '<div class="tdk-ok" role="status">' + (t.disimpan === 'luar' ? '⏳ Disimpan dalam telefon — dihantar bila ada internet' : '✓ Disimpan') + '</div>';
-    return '<button class="btn block" disabled>Simpan</button>';
+    return '<div class="tdk-st">Disimpan terus bila ditekan.</div>';
   }
   function tdkTugasan(tugasanId, siap) {
-    var t = S.tdk; t.st[tugasanId] = siap; t.disimpan = false; lukisTindakan();
+    var t = S.tdk; t.st[tugasanId] = siap; simpanTdk();
   }
   function tdkTp(n) {
     var t = S.tdk, id = t.babPilih;
     if (!id) return;
     if (t.tp[id] === n) delete t.tp[id]; else t.tp[id] = n;
-    t.disimpan = false; lukisTindakan();
+    simpanTdk();
   }
   async function simpanTdk() {
     var t = S.tdk, u = ubahTdk(), gagal = [], luar = false;
-    if (!u.tp.length && !u.st.length) return;
-    t.sedang = true; lukisTindakan();
+    if (t.sedang) { t.lagi = true; lukisTindakan(); return; } // tekanan cepat: simpan selepas yang ini siap
+    if (!u.tp.length && !u.st.length) { lukisTindakan(); return; }
+    t.sedang = true; t.lagi = false; lukisTindakan();
+    var stNilai = {}, tpNilai = {}; // nilai yang dihantar sekarang (guru mungkin tekan lagi semasa menunggu)
+    u.st.forEach(function (id) { stNilai[id] = t.st[id]; }); u.tp.forEach(function (id) { tpNilai[id] = t.tp[id] || null; });
     if (u.st.length) {
-      var r1 = await simpanRekod('status_tugasan', u.st.map(function (id) { return { tugasan_id: id, murid_id: t.muridId, siap: t.st[id] }; }));
+      var r1 = await simpanRekod('status_tugasan', u.st.map(function (id) { return { tugasan_id: id, murid_id: t.muridId, siap: stNilai[id] }; }));
       if (r1.error) gagal.push('Kerja rumah: ' + errMsg(r1.error));
-      else { u.st.forEach(function (id) { t.stAsal[id] = t.st[id]; }); if (r1.luar) luar = true; }
+      else { u.st.forEach(function (id) { t.stAsal[id] = stNilai[id]; }); if (r1.luar) luar = true; }
     }
-    var naik = u.tp.filter(function (id) { return t.tp[id]; }), padam = u.tp.filter(function (id) { return !t.tp[id]; });
+    var naik = u.tp.filter(function (id) { return tpNilai[id]; }), padam = u.tp.filter(function (id) { return !tpNilai[id]; });
     if (naik.length) {
-      var r2 = await sb.from('pbd_tp').upsert(naik.map(function (id) { return { item_id: id, murid_id: t.muridId, kelas_id: t.kelasId, tp: t.tp[id] }; }), { onConflict: 'item_id,murid_id' });
-      if (r2.error) gagal.push('PBD: ' + errMsg(r2.error)); else naik.forEach(function (id) { t.tpAsal[id] = t.tp[id]; });
+      var r2 = await sb.from('pbd_tp').upsert(naik.map(function (id) { return { item_id: id, murid_id: t.muridId, kelas_id: t.kelasId, tp: tpNilai[id] }; }), { onConflict: 'item_id,murid_id' });
+      if (r2.error) gagal.push('PBD: ' + errMsg(r2.error)); else naik.forEach(function (id) { t.tpAsal[id] = tpNilai[id]; });
     }
     if (padam.length) {
       var r3 = await sb.from('pbd_tp').delete().eq('murid_id', t.muridId).in('item_id', padam);
@@ -2411,8 +2427,9 @@
     t.sedang = false;
     t.disimpan = gagal.length ? false : (luar ? 'luar' : true);
     lukisTindakan();
-    if (gagal.length) toast('Belum disimpan — ' + gagal[0] + '. Tekan Simpan sekali lagi.');
-    else { toast(luar ? 'Disimpan dalam telefon.' : 'Disimpan ✓'); kemasPetunjukOutbox(); }
+    if (t.lagi && !gagal.length) { simpanTdk(); return; }
+    if (gagal.length) toast('Belum disimpan — ' + gagal[0] + '. Tekan Cuba lagi.');
+    else { if (!luar) tandaDisimpan(); kemasPetunjukOutbox(); }
     var m = S.murid.filter(function (x) { return x.id === t.muridId; })[0];
     muatKrMurid(t.muridId, (m.kelas_murid || []).map(function (l) { return { k: cariKelas(l.kelas_id) }; }).filter(function (x) { return x.k; }));
     muatAsMurid(t.muridId);
