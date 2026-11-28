@@ -358,3 +358,8 @@ input[type="date"].input { min-height: 48px; }
 #tanda-simpan.luar { background: #B45309; }
 @media (prefers-reduced-motion: reduce) { #tanda-simpan { transition: none; } }
 .tdk-st { text-align: center; font-size: 13px; color: var(--sub); padding: 6px 0; }
+/* Bar notifikasi halaman kelas (versi 25): hanya yang ada murid; hilang bila tiada */
+.notif-bar { display: flex; gap: 8px; }
+.notif-bar[hidden] { display: none; }
+.notif-bar .alert { flex: 1 1 0; min-width: 0; }
+.notif-bar .alert span { line-height: 1.2; }

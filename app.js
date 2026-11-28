@@ -12,7 +12,7 @@
   var $toast = document.getElementById('toast');
 
   /* Nombor versi app. Naikkan SERENTAK dengan version.json dan CACHE dalam sw.js. */
-  var VERSI = '24';
+  var VERSI = '25';
 
   var S = { session: null, profil: null, kelas: [], murid: [], loaded: false, q: '', authTab: 'masuk', recovery: false, scanner: null };
 
@@ -671,10 +671,7 @@
             '<button class="chip pill-btn" data-act="senarai-murid" data-id="' + k.id + '">' + bil + ' murid ' + I.chev.replace('width="18" height="18"', 'width="12" height="12"') + '</button></div></div>' +
           '<button class="banner-btn" data-act="senarai-murid" data-id="' + k.id + '" data-cari="1" aria-label="Cari murid dalam kelas ini">' + I.search + '</button>' +
         '</div>' +
-        '<div class="alert-grid dua">' +
-          '<button class="alert" data-act="alert-lama" data-id="' + k.id + '"><b style="color:#DC2626" data-lama>…</b><span>Lama tak hadir</span></button>' +
-          '<button class="alert" data-act="alert-kr" data-id="' + k.id + '"><b style="color:#EA580C" data-kr>…</b><span>KR tak siap</span></button>' +
-        '</div>' +
+        '<div class="notif-bar" data-notif hidden></div>' +
       '</div>' +
       '<div class="modul-grid">' + MODUL.map(function (m) {
         var inner = logo(m.id, 64) + '<strong>' + m.nama + '</strong><small>' + m.desc + '</small>';
@@ -684,31 +681,56 @@
       }).join('') + '</div>' +
       '<div class="scan-wrap"><button class="scan-btn" data-act="scan">' + I.qr + 'Scan profil murid</button></div>' +
     '</div>';
-    muatLamaTakHadir(k.id);
-    muatKrTertunggak(k.id);
+    muatNotif(k.id);
   }
 
-  /* Kotak "Lama tak hadir": murid tidak hadir 3 rekod terakhir berturut-turut. */
+  /* ---------- Bar notifikasi halaman kelas (versi 25) ----------
+     Hanya jenis yang ada murid dipaparkan; tiada langsung = bar hilang sendiri.
+     Kiraan dari pangkalan data (RPC ikut RLS guru). */
   var LAMA_N = 3;
-  async function muatLamaTakHadir(kelasId) {
-    var r = await sb.rpc('lama_tak_hadir', { p_kelas: kelasId, p_n: LAMA_N });
-    var el = $app.querySelector('[data-lama]');
-    if (!el) return;
-    if (r.error) { el.textContent = '–'; return; }
-    S.lamaTakHadir = { kelasId: kelasId, ids: (r.data || []).map(function (x) { return x.murid_id; }) };
-    el.textContent = String(S.lamaTakHadir.ids.length);
+  var NOTIF = [
+    { id: 'lama', label: 'Tak hadir 3 hari', warna: '#DC2626', bg: '#FEE2E2', fg: '#B91C1C',
+      nota: 'Murid yang tidak hadir dalam ' + LAMA_N + ' rekod kehadiran terakhir secara berturut-turut. Nama hilang sendiri bila murid hadir.' },
+    { id: 'kr', label: 'KR tak siap', warna: '#EA580C', bg: '#FFEDD5', fg: '#C2410C', unit: 'tugasan',
+      nota: 'Murid yang masih ada kerja rumah Tidak siap. Nama hilang sendiri bila ditanda Siap.' },
+    { id: 'buku', label: 'Buku tak hantar', warna: '#B45309', bg: '#FEF3C7', fg: '#92400E', unit: 'buku',
+      nota: 'Murid yang belum hantar buku (Kutip buku). Nama hilang sendiri bila ditanda Hantar.' },
+    { id: 'tp', label: 'TP1 / TP2', warna: '#6D28D9', bg: '#EDE9FE', fg: '#5B21B6', unit: 'Bab',
+      nota: 'Murid yang mendapat TP1 atau TP2 dalam sekurang-kurangnya satu Bab (TP semasa). Nama hilang sendiri bila TP dinaikkan.' }
+  ];
+  async function muatNotif(kelasId) {
+    var res = await Promise.all([
+      sb.rpc('lama_tak_hadir', { p_kelas: kelasId, p_n: LAMA_N }),
+      sb.rpc('kr_tertunggak', { p_kelas: kelasId }),
+      sb.rpc('buku_tak_hantar', { p_kelas: kelasId }),
+      sb.rpc('tp_rendah', { p_kelas: kelasId, p_had: 2 })
+    ]);
+    var d = { kelasId: kelasId };
+    NOTIF.forEach(function (n, i) {
+      var r = res[i], m = {};
+      if (!r.error) (r.data || []).forEach(function (x) { m[x.murid_id] = x.bil || 1; });
+      d[n.id] = m; // ralat (cth. tiada internet) = tidak dipaparkan
+    });
+    S.notif = d;
+    var el = $app.querySelector('[data-notif]');
+    if (!el || S.kelasTerakhir !== kelasId) return;
+    var ada = NOTIF.filter(function (n) { return Object.keys(d[n.id]).length; });
+    el.hidden = !ada.length;
+    el.innerHTML = ada.map(function (n) {
+      return '<button class="alert" data-act="notif" data-jenis="' + n.id + '" data-id="' + kelasId + '"><b style="color:' + n.warna + '">' + Object.keys(d[n.id]).length + '</b><span>' + n.label + '</span></button>';
+    }).join('');
   }
-
-  function sheetLamaTakHadir(kelasId) {
-    var k = cariKelas(kelasId);
-    var ids = (S.lamaTakHadir && S.lamaTakHadir.kelasId === kelasId) ? S.lamaTakHadir.ids : [];
-    var list = muridKelas(kelasId).filter(function (m) { return ids.indexOf(m.id) >= 0; });
-    openSheet('<div class="between"><h2>Lama tak hadir</h2><button class="icon-sm" data-act="sheet-close" aria-label="Tutup">' + I.close + '</button></div>' +
-      '<p class="sub" style="margin:0">Murid yang tidak hadir dalam ' + LAMA_N + ' rekod kehadiran terakhir ' + esc(k ? k.nama : '') + ' secara berturut-turut.</p>' +
+  function sheetNotif(kelasId, jenis) {
+    var n = NOTIF.filter(function (x) { return x.id === jenis; })[0], k = cariKelas(kelasId);
+    var bil = (S.notif && S.notif.kelasId === kelasId && S.notif[jenis]) || {};
+    var list = muridKelas(kelasId).filter(function (m) { return bil[m.id]; });
+    openSheet('<div class="between"><h2>' + n.label + '</h2><button class="icon-sm" data-act="sheet-close" aria-label="Tutup">' + I.close + '</button></div>' +
+      '<p class="sub" style="margin:0">' + esc(k ? k.nama : '') + ' · ' + n.nota + '</p>' +
       '<div class="sheet-scroll">' + (list.length ? list.map(function (m) {
-        return '<button class="list-row" data-act="profil-murid" data-id="' + m.id + '"><span class="murid-av" style="width:36px;height:36px;font-size:13px;background:#FEE2E2;color:#B91C1C">' + esc(inisial(m.nama)) + '</span><span class="grow" style="font-size:15px;font-weight:600">' + esc(m.nama) + '</span><span class="muted">' + I.chev + '</span></button>';
-      }).join('') : '<p class="sub" style="padding:12px 2px">Tiada murid. Bagus!</p>') + '</div>',
-      { label: 'Lama tak hadir' });
+        return '<button class="list-row" data-act="profil-murid" data-id="' + m.id + '"><span class="murid-av" style="width:36px;height:36px;font-size:13px;background:' + n.bg + ';color:' + n.fg + '">' + esc(inisial(m.nama)) + '</span><span class="grow" style="font-size:15px;font-weight:600">' + esc(m.nama) + '</span>' +
+          (n.unit ? '<span class="chip" style="background:' + n.bg + ';color:' + n.fg + '">' + bil[m.id] + ' ' + n.unit + '</span>' : '<span class="muted">' + I.chev + '</span>') + '</button>';
+      }).join('') : '<p class="sub" style="padding:12px 2px">Tiada murid.</p>') + '</div>',
+      { label: n.label });
   }
 
   function sheetMurid(kelasId, fokusCari) {
@@ -926,28 +948,6 @@
     var kiniTak = !!(r && r.hadir === false);
     setHadir(id, kiniTak, null); // tidak hadir -> hadir, hadir -> tidak hadir
   });
-
-  /* ---------- KR tak siap (banner) ---------- */
-  async function muatKrTertunggak(kelasId) {
-    var r = await sb.rpc('kr_tertunggak', { p_kelas: kelasId });
-    var el = $app.querySelector('[data-kr]');
-    if (!el) return;
-    if (r.error) { el.textContent = '–'; return; }
-    S.krTertunggak = { kelasId: kelasId, rows: r.data || [] };
-    el.textContent = String(S.krTertunggak.rows.length);
-  }
-
-  function sheetKrTertunggak(kelasId) {
-    var rows = (S.krTertunggak && S.krTertunggak.kelasId === kelasId) ? S.krTertunggak.rows : [];
-    var bil = {}; rows.forEach(function (x) { bil[x.murid_id] = x.bil; });
-    var list = muridKelas(kelasId).filter(function (m) { return bil[m.id]; });
-    openSheet('<div class="between"><h2>KR tak siap</h2><button class="icon-sm" data-act="sheet-close" aria-label="Tutup">' + I.close + '</button></div>' +
-      '<p class="sub" style="margin:0">Murid yang masih ada kerja rumah Tidak siap. Nama hilang sendiri bila semua sudah dihantar.</p>' +
-      '<div class="sheet-scroll">' + (list.length ? list.map(function (m) {
-        return '<button class="list-row" data-act="profil-murid" data-id="' + m.id + '"><span class="murid-av" style="width:36px;height:36px;font-size:13px;background:#FFEDD5;color:#C2410C">' + esc(inisial(m.nama)) + '</span><span class="grow" style="font-size:15px;font-weight:600">' + esc(m.nama) + '</span><span class="chip" style="background:#FFEDD5;color:#C2410C">' + bil[m.id] + ' tugasan</span></button>';
-      }).join('') : '<p class="sub" style="padding:12px 2px">Tiada murid. Semua sudah siap!</p>') + '</div>',
-      { label: 'KR tak siap' });
-  }
 
   /* ---------- TaskTrack: senarai tugasan ---------- */
   function kepalaModul(k, id, nama, balik) {
@@ -2565,8 +2565,7 @@
     'garis-panduan': function (el) { var w = $app.querySelector('.preview-wrap'); if (w) { w.classList.toggle('guides'); el.setAttribute('aria-pressed', String(w.classList.contains('guides'))); } },
     'jana-qr': function (el) { janaQrBaru(el.dataset.id); },
     'alert': function () { toast('Akan aktif selepas modul Buku siap.'); },
-    'alert-lama': function (el) { sheetLamaTakHadir(el.dataset.id); },
-    'alert-kr': function (el) { sheetKrTertunggak(el.dataset.id); },
+    'notif': function (el) { sheetNotif(el.dataset.id, el.dataset.jenis); },
     'an-tempoh': function (el) { location.replace('#/modul/analisis/' + el.dataset.id + '/' + el.dataset.t); },
     'an-had': function () { sheetHad(); },
     'had-asal': function (el) { var f = el.closest('form'); Object.keys(HAD_ASAL).forEach(function (k) { f[k].value = HAD_ASAL[k]; }); },
