@@ -42,9 +42,9 @@ h2 { margin: 0; font-size: 18px; font-weight: 800; }
 .grow { flex: 1; min-width: 0; }
 
 /* Boot */
-.boot { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
-.boot-logo { width: 64px; height: 64px; border-radius: 18px; background: url('icons/logo.svg') center/cover; animation: pulse 1.2s ease-in-out infinite; }
-@keyframes pulse { 50% { transform: scale(.92); opacity: .7; } }
+.boot { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 100vh; min-height: 100dvh; }
+.boot-logo { width: 80px; height: 80px; border-radius: 22px; background: url('icons/logo.svg') center/cover; animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .55; } } /* hanya pudar, saiz kekal */
 @media (prefers-reduced-motion: reduce) { .boot-logo { animation: none; } }
 
 /* ===== Komponen ===== */
@@ -134,7 +134,8 @@ textarea.input { min-height: 160px; resize: vertical; line-height: 1.5; }
 
 /* Auth */
 .auth { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 32px 24px; gap: 22px; }
-.auth-logo { width: 72px; height: 72px; border-radius: 20px; background: url('icons/logo.svg') center/cover; }
+.auth-logo { width: 80px; height: 80px; border-radius: 22px; background: url('icons/logo.svg') center/cover; align-self: center; flex-shrink: 0; }
+.auth-head, .auth > h1, .auth > .sub { text-align: center; align-items: center; }
 .tabs { display: flex; gap: 4px; padding: 4px; border-radius: 14px; background: var(--soft); }
 .tabs button { flex: 1; border: none; border-radius: 10px; padding: 10px; font-weight: 700; min-height: 44px; background: transparent; color: var(--sub); }
 .tabs button[aria-selected="true"] { background: var(--card); color: var(--text); box-shadow: var(--shadow); }

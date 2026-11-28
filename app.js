@@ -12,7 +12,7 @@
   var $toast = document.getElementById('toast');
 
   /* Nombor versi app. Naikkan SERENTAK dengan version.json dan CACHE dalam sw.js. */
-  var VERSI = '19';
+  var VERSI = '20';
 
   var S = { session: null, profil: null, kelas: [], murid: [], loaded: false, q: '', authTab: 'masuk', recovery: false, scanner: null };
 
@@ -452,7 +452,7 @@
     var daftar = S.authTab === 'daftar';
     $app.innerHTML =
       '<div class="auth">' +
-        '<div class="stack" style="gap:14px"><div class="auth-logo" role="img" aria-label="Logo EduTrack"></div>' +
+        '<div class="stack auth-head" style="gap:14px"><div class="auth-logo" role="img" aria-label="Logo EduTrack"></div>' +
         '<div><h1>Edu<span style="color:var(--acc)">Track</span></h1><p class="sub" style="margin:4px 0 0">Pengurusan kelas untuk guru · versi ' + VERSI + '</p></div></div>' +
         '<div class="tabs" role="tablist">' +
           '<button role="tab" aria-selected="' + !daftar + '" data-act="auth-tab" data-tab="masuk">Log masuk</button>' +
