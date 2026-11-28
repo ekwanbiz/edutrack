@@ -12,7 +12,7 @@
   var $toast = document.getElementById('toast');
 
   /* Nombor versi app. Naikkan SERENTAK dengan version.json dan CACHE dalam sw.js. */
-  var VERSI = '23';
+  var VERSI = '24';
 
   var S = { session: null, profil: null, kelas: [], murid: [], loaded: false, q: '', authTab: 'masuk', recovery: false, scanner: null };
 
@@ -258,16 +258,26 @@
     S.murid = res[1].data || [];
     S.loaded = true; S.luarTalian = false;
     simpanCache();
+    if (!S.susunLatar) { S.susunLatar = true; setTimeout(susunSemuaKelas, 0); }
+  }
+  // Kelas lama yang nombor giliran tersimpannya belum ikut abjad: kemas sekali selepas log masuk (senyap).
+  async function susunSemuaKelas() {
+    for (var i = 0; i < S.kelas.length; i++) {
+      var list = muridKelas(S.kelas[i].id);
+      if (list.some(function (m) { return m.noSimpan !== m.no; })) await susunGiliran(S.kelas[i].id);
+    }
+    simpanCache();
   }
 
   function muridKelas(kelasId) {
     return S.murid
       .map(function (m) {
         var l = (m.kelas_murid || []).filter(function (x) { return x.kelas_id === kelasId; })[0];
-        return l ? { id: m.id, nama: m.nama, no: l.no_giliran } : null;
+        return l ? { id: m.id, nama: m.nama, noSimpan: l.no_giliran } : null;
       })
       .filter(Boolean)
-      .sort(function (a, b) { return (a.no - b.no) || a.nama.localeCompare(b.nama); });
+      .sort(bandingNama) // senarai SENTIASA A–Z ikut nama (permintaan cikgu, versi 24)
+      .map(function (m, i) { m.no = i + 1; return m; });
   }
   function bilMurid(kelasId) { return muridKelas(kelasId).length; }
   function muridAktif() { return S.murid.filter(function (m) { return (m.kelas_murid || []).length > 0; }); }
@@ -2069,10 +2079,13 @@
   function bandingNama(a, b) { return a.nama.localeCompare(b.nama, 'ms', { sensitivity: 'base', numeric: true }); }
   async function susunGiliran(kelasId) {
     var list = muridKelas(kelasId).slice().sort(bandingNama), ubah = [];
-    list.forEach(function (m, i) { if (m.no !== i + 1) ubah.push({ kelas_id: kelasId, murid_id: m.id, no_giliran: i + 1 }); });
+    list.forEach(function (m, i) { if (m.noSimpan !== i + 1) ubah.push({ kelas_id: kelasId, murid_id: m.id, no_giliran: i + 1 }); });
     if (!ubah.length) return { ok: true };
     var r = await sb.from('kelas_murid').upsert(ubah, { onConflict: 'kelas_id,murid_id' });
     if (r.error) toast('Nama disimpan, tetapi nombor giliran belum disusun: ' + errMsg(r.error));
+    else ubah.forEach(function (u) { // kemas salinan dalam telefon tanpa muat semula
+      S.murid.forEach(function (m) { if (m.id === u.murid_id) (m.kelas_murid || []).forEach(function (l) { if (l.kelas_id === kelasId) l.no_giliran = u.no_giliran; }); });
+    });
     return r;
   }
 
@@ -2231,7 +2244,7 @@
   function renderMurid(id) {
     var m = S.murid.filter(function (x) { return x.id === id; })[0];
     if (!m) return go('#/');
-    var links = (m.kelas_murid || []).map(function (l) { return { k: cariKelas(l.kelas_id), no: l.no_giliran }; }).filter(function (x) { return x.k; });
+    var links = (m.kelas_murid || []).map(function (l) { return { k: cariKelas(l.kelas_id), no: (muridKelas(l.kelas_id).filter(function (x) { return x.id === m.id; })[0] || {}).no }; }).filter(function (x) { return x.k; });
     var w = warna(links.length ? links[0].k.warna : 3);
     $app.innerHTML = '<div class="page">' +
       '<div class="row"><button class="icon-btn" data-act="back" aria-label="Kembali">' + I.back + '</button><div class="row" style="gap:10px">' + logo('profil', 40) + '<h2>Murid</h2></div></div>' +
@@ -2775,7 +2788,8 @@
       ]);
       var kelas = {}; S.kelas.forEach(function (k) { kelas[k.id] = k; });
       var murid = {}, no = {};
-      S.murid.forEach(function (m) { murid[m.id] = m; (m.kelas_murid || []).forEach(function (x) { no[x.kelas_id + '|' + m.id] = x.no_giliran; }); });
+      S.murid.forEach(function (m) { murid[m.id] = m; });
+      S.kelas.forEach(function (k) { muridKelas(k.id).forEach(function (x) { no[k.id + '|' + x.id] = x.no; }); });
       var baris = [['Jenis', 'Kelas', 'Subjek', 'No', 'Nama murid', 'Tarikh', 'Perkara', 'Nilai', 'Catatan']];
       function b(jenis, kelasId, muridId, tarikh, perkara, nilai, catatan) {
         var k = kelas[kelasId] || {}, m = murid[muridId] || {};
