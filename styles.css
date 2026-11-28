@@ -379,3 +379,20 @@ input[type="date"].input { min-height: 48px; }
 .chip-radio span { display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; border-radius: 999px; background: var(--soft); font-weight: 700; font-size: 14px; border: 2px solid transparent; }
 .chip-radio input:checked + span { background: var(--tint-now); color: var(--acc); border-color: var(--acc); }
 .chip-radio input:focus-visible + span { outline: 2px solid var(--acc); outline-offset: 2px; }
+/* Kutip buku: buku -> tarikh, status lewat/dikecualikan, jadual rekod (versi 30) */
+.buku-stat { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.buku-stat div { background: var(--soft); border-radius: 12px; padding: 8px 6px; text-align: center; display: flex; flex-direction: column; }
+.buku-stat b { font-size: 19px; font-weight: 800; color: var(--text); line-height: 1.15; }
+.buku-stat span { font-size: 11px; color: var(--muted); font-weight: 600; }
+.ax-kad.lewat { background: #FEF9C3; border-color: #FACC15; color: #854D0E; }
+.ax-kad.kecuali { background: #E2E8F0; border-color: #94A3B8; color: #334155; }
+.st-buku { justify-content: flex-start; font-weight: 800; border: 2px solid transparent; }
+.st-buku[aria-pressed="true"] { border-color: currentColor; }
+.jadual-buku-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.jadual-buku { border-collapse: separate; border-spacing: 0; font-size: 12px; min-width: 100%; }
+.jadual-buku th, .jadual-buku td { padding: 7px 6px; text-align: center; border-bottom: 1px solid var(--line); white-space: nowrap; min-width: 36px; }
+.jadual-buku thead th { font-weight: 800; color: var(--muted); background: var(--card); position: sticky; top: 0; }
+.jadual-buku .nama { position: sticky; left: 0; z-index: 1; background: var(--card); text-align: left; font-weight: 600; min-width: 120px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; box-shadow: 1px 0 0 var(--line); }
+.jadual-buku thead .nama { z-index: 2; }
+.jadual-buku td { font-weight: 800; font-size: 13px; }
+.jadual-buku .jum { color: #C2410C; }
