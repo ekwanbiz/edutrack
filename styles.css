@@ -345,3 +345,6 @@ button.saved { border: none; font: inherit; cursor: pointer; }
 .catatan-in { height: 48px; }
 textarea.catatan-in { height: 48px !important; min-height: 48px !important; }
 input[type="date"].input { min-height: 48px; }
+/* Kepala halaman: logo & tajuk boleh ditekan untuk kembali */
+.row:has(> .icon-btn[aria-label^="Kembali"]) { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.row:has(> .icon-btn[aria-label^="Kembali"]):active > :not(.icon-btn) { opacity: .6; }

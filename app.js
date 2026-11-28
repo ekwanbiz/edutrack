@@ -12,7 +12,7 @@
   var $toast = document.getElementById('toast');
 
   /* Nombor versi app. Naikkan SERENTAK dengan version.json dan CACHE dalam sw.js. */
-  var VERSI = '16';
+  var VERSI = '17';
 
   var S = { session: null, profil: null, kelas: [], murid: [], loaded: false, q: '', authTab: 'masuk', recovery: false, scanner: null };
 
@@ -2588,6 +2588,19 @@
     if (!fn) return;
     if (el.tagName === 'A') e.preventDefault();
     fn(el, e);
+  });
+
+  // Kepala halaman: tekan logo atau tajuk = sama seperti butang Kembali (sasaran lebih besar untuk ibu jari).
+  function butangKembali(row) {
+    var b = row && row.firstElementChild;
+    return b && b.matches('.icon-btn[aria-label^="Kembali"]') ? b : null;
+  }
+  document.addEventListener('click', function (e) {
+    if (e.target.closest('a,button,input,select,textarea,label,[data-act]')) return;
+    var row = e.target.closest('.row');
+    while (row && !butangKembali(row)) row = row.parentElement && row.parentElement.closest('.row');
+    var b = butangKembali(row);
+    if (b && e.target !== row) b.click(); // ruang kosong di hujung baris tidak dikira
   });
 
   document.addEventListener('input', function (e) {
