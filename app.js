@@ -12,7 +12,7 @@
   var $toast = document.getElementById('toast');
 
   /* Nombor versi app. Naikkan SERENTAK dengan version.json dan CACHE dalam sw.js. */
-  var VERSI = '18';
+  var VERSI = '19';
 
   var S = { session: null, profil: null, kelas: [], murid: [], loaded: false, q: '', authTab: 'masuk', recovery: false, scanner: null };
 
@@ -2058,6 +2058,17 @@
     }).filter(function (n) { return n && /[A-Za-zÀ-￿]/.test(n); });
   }
 
+  // Nombor giliran sentiasa ikut abjad nama (permintaan cikgu, versi 19). Hanya baris yang berubah dihantar.
+  function bandingNama(a, b) { return a.nama.localeCompare(b.nama, 'ms', { sensitivity: 'base', numeric: true }); }
+  async function susunGiliran(kelasId) {
+    var list = muridKelas(kelasId).slice().sort(bandingNama), ubah = [];
+    list.forEach(function (m, i) { if (m.no !== i + 1) ubah.push({ kelas_id: kelasId, murid_id: m.id, no_giliran: i + 1 }); });
+    if (!ubah.length) return { ok: true };
+    var r = await sb.from('kelas_murid').upsert(ubah, { onConflict: 'kelas_id,murid_id' });
+    if (r.error) toast('Nama disimpan, tetapi nombor giliran belum disusun: ' + errMsg(r.error));
+    return r;
+  }
+
   async function tambahMurid(kelasId, form) {
     var err = form.querySelector('[data-err]'), btn = form.querySelector('[type=submit]');
     var names = bersihSenarai(form.senarai.value);
@@ -2075,6 +2086,7 @@
     btn.disabled = false;
     if (r2.error) { err.textContent = errMsg(r2.error); return; }
     await loadData(true);
+    if (!(await susunGiliran(kelasId)).error) await loadData(true);
     toast(names.length + ' murid ditambah.');
     renderUrusKelas(kelasId);
   }
@@ -2090,6 +2102,7 @@
     btn.disabled = false;
     if (r.error) { toast(errMsg(r.error)); return; }
     await loadData(true);
+    if (!(await susunGiliran(kelasId)).error) await loadData(true);
     toast(src.length + ' murid disalin.');
     renderUrusKelas(kelasId);
   }
@@ -2106,11 +2119,13 @@
     var r = await sb.from('kelas_murid').delete().eq('kelas_id', kelasId).eq('murid_id', muridId);
     if (r.error) { toast(errMsg(r.error)); return; }
     await loadData(true);
+    if (!(await susunGiliran(kelasId)).error) await loadData(true);
     renderUrusKelas(kelasId);
     toast(m.nama + ' dibuang dari kelas.', async function () {
       var u = await sb.from('kelas_murid').insert({ kelas_id: kelasId, murid_id: muridId, no_giliran: m.no });
       if (u.error) { toast(errMsg(u.error)); return; }
       await loadData(true);
+      if (!(await susunGiliran(kelasId)).error) await loadData(true);
       if (location.hash === '#/urus/kelas/' + kelasId) renderUrusKelas(kelasId);
     });
   }
@@ -2710,7 +2725,11 @@
       if (!nama) { err.textContent = 'Isi nama murid.'; return; }
       var r = await sb.from('murid').update({ nama: nama }).eq('id', form.dataset.id);
       if (r.error) { err.textContent = errMsg(r.error); return; }
-      await loadData(true); closeSheet(); toast('Nama murid dikemas kini.'); route();
+      await loadData(true);
+      var mm = S.murid.filter(function (x) { return x.id === form.dataset.id; })[0], ok = true;
+      for (var i = 0; mm && i < (mm.kelas_murid || []).length; i++) if ((await susunGiliran(mm.kelas_murid[i].kelas_id)).error) ok = false;
+      if (ok) await loadData(true);
+      closeSheet(); toast('Nama murid dikemas kini.'); route();
     },
     'akaun': async function (form) {
       var nama = form.nama.value.trim();
