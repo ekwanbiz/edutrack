@@ -12,7 +12,7 @@
   var $toast = document.getElementById('toast');
 
   /* Nombor versi app. Naikkan SERENTAK dengan version.json dan CACHE dalam sw.js. */
-  var VERSI = '28';
+  var VERSI = '29';
 
   var S = { session: null, profil: null, kelas: [], murid: [], loaded: false, q: '', authTab: 'masuk', recovery: false, scanner: null };
 
@@ -210,7 +210,7 @@
 
   var MODUL = [
     { id: 'attendx', nama: 'Kehadiran', desc: 'Rekod kehadiran', },
-    { id: 'tasktrack', nama: 'Buku', desc: 'Kerja rumah · kutip buku', },
+    { id: 'tasktrack', nama: 'Buku', desc: 'Homework · kutip buku', },
     { id: 'assessment', nama: 'Penilaian', desc: 'PBD · kuiz · peperiksaan', },
     { id: 'profil', nama: 'Murid', desc: 'Profil murid · QR' },
     { id: 'analisis', nama: 'Report', desc: 'Statistik · laporan', },
@@ -406,7 +406,7 @@
       (c.tunggu ? '<button class="btn block" data-act="outbox-hantar">Hantar sekarang</button>' : '') +
       (gagal.length ? '<span class="section-title" style="margin-top:6px">Ditolak oleh pelayan (' + gagal.length + ')</span><p class="sub" style="margin:0">Biasanya kerana murid sudah dibuang dari kelas atau tugasan sudah dipadam. Rekod ini tidak dipadam sendiri.</p>' +
         '<div class="sheet-scroll">' + gagal.slice(0, 50).map(function (x) {
-          var r = x.r, apa = x.t === 'kehadiran' ? 'Kehadiran ' + tarikhDMY(r.tarikh) + ': ' + (r.hadir ? 'Hadir' : 'Tidak hadir') : 'Kerja rumah: ' + (r.siap ? 'Siap' : 'Tidak siap');
+          var r = x.r, apa = x.t === 'kehadiran' ? 'Kehadiran ' + tarikhDMY(r.tarikh) + ': ' + (r.hadir ? 'Hadir' : 'Tidak hadir') : 'Homework: ' + (r.siap ? 'Siap' : 'Tidak siap');
           return '<div class="list-row"><span class="grow"><b style="display:block;font-size:14px">' + esc(nama[r.murid_id] || 'Murid tidak dijumpai') + '</b><span class="sub">' + esc(apa) + ' · ' + esc(x.sebab || '') + '</span></span></div>';
         }).join('') + '</div><button class="btn danger block" data-act="outbox-buang">Buang ' + gagal.length + ' rekod yang ditolak</button>' : ''),
       { label: 'Rekod dalam telefon' });
@@ -696,8 +696,8 @@
   var NOTIF = [
     { id: 'lama', label: 'Tak hadir', had: [3, 5, 7], unit: 'hari', ikutMurid: true,
       nota: 'Tidak hadir berturut-turut (rekod kehadiran terkini). Nama hilang sendiri bila murid hadir.' },
-    { id: 'kr', label: 'KR tak siap', had: [1, 3, 5], unit: 'kali', ikutMurid: true,
-      nota: 'Bilangan kerja rumah yang masih Tidak siap. Nama hilang sendiri bila ditanda Siap.' },
+    { id: 'kr', label: 'Homework tak siap', had: [1, 3, 5], unit: 'kali', ikutMurid: true,
+      nota: 'Bilangan homework yang masih Tidak siap. Nama hilang sendiri bila ditanda Siap.' },
     { id: 'buku', label: 'Buku tak hantar', had: [1, 3, 5], unit: 'kali', ikutMurid: true,
       nota: 'Bilangan Kutip buku yang masih Tidak hantar. Nama hilang sendiri bila ditanda Hantar.' },
     { id: 'tp', label: 'TP1 / TP2', had: [3, 7, 10], unit: 'Bab', ikutMurid: false,
@@ -1021,11 +1021,11 @@
     return '<div class="row"><a class="icon-btn" href="' + (balik || '#/kelas/' + k.id) + '" aria-label="Kembali">' + I.back + '</a><div class="row" style="gap:10px">' + logo(id, 40) + '<div><h2>' + nama + '</h2><span class="sub">' + esc(k.nama + (k.subjek ? ' · ' + k.subjek : '')) + '</span></div></div></div>';
   }
 
-  /* Dua jenis tugasan: 'kr' kerja rumah, 'buku' kutip buku (tidak semestinya kerja rumah). */
+  /* Dua jenis tugasan: 'kr' homework, 'buku' kutip buku (tidak semestinya homework). */
   function kataTT(jenis) {
     return jenis === 'buku'
       ? { label: 'Kutip buku', ya: 'Hantar', tak: 'Tidak hantar', semua: 'Semua hantar', tajuk: 'cth. Buku latihan Matematik' }
-      : { label: 'Kerja rumah', ya: 'Siap', tak: 'Tidak siap', semua: 'Semua siap', tajuk: 'cth. Latihan m/s 34' };
+      : { label: 'Homework', ya: 'Siap', tak: 'Tidak siap', semua: 'Semua siap', tajuk: 'cth. Latihan m/s 34' };
   }
 
   async function renderTaskTrack(kelasId, tab) {
@@ -1034,7 +1034,7 @@
     tab = tab === 'buku' ? 'buku' : (tab === 'kr' ? 'kr' : pref.get('tt_tab', 'kr'));
     pref.set('tt_tab', tab);
     var hash = location.hash, kt = kataTT(tab);
-    var tabs = '<div class="seg"><button data-act="tt-tab" data-id="' + k.id + '" data-tab="kr" aria-pressed="' + (tab === 'kr') + '">Kerja rumah</button><button data-act="tt-tab" data-id="' + k.id + '" data-tab="buku" aria-pressed="' + (tab === 'buku') + '">Kutip buku</button></div>';
+    var tabs = '<div class="seg"><button data-act="tt-tab" data-id="' + k.id + '" data-tab="kr" aria-pressed="' + (tab === 'kr') + '">Homework</button><button data-act="tt-tab" data-id="' + k.id + '" data-tab="buku" aria-pressed="' + (tab === 'buku') + '">Kutip buku</button></div>';
     $app.innerHTML = '<div class="page">' + kepalaModul(k, 'tasktrack', 'Buku') + tabs + '<p class="sub">Memuatkan…</p></div>';
     var r = await sb.rpc('ringkasan_tugasan', { p_kelas: k.id, p_had: 100, p_jenis: tab });
     var luar = !!(r.error && rangkaianGagal(r.error)), cKey = 'et_cache_ttl_' + uid() + '_' + k.id + '_' + tab;
@@ -1044,17 +1044,17 @@
     if (!luar) simpanLS(cKey, list.slice(0, 30));
     $app.innerHTML = '<div class="page">' + kepalaModul(k, 'tasktrack', 'Buku') + tabs +
       '<div data-outbox>' + htmlOutbox() + '</div>' +
-      (luar ? '<div class="card luar-nota">Tiada internet. Senarai ini salinan terakhir dalam telefon; ' + (tab === 'buku' ? 'kutip buku' : 'kerja rumah') + ' baharu perlu internet.</div>' : '') +
+      (luar ? '<div class="card luar-nota">Tiada internet. Senarai ini salinan terakhir dalam telefon; ' + (tab === 'buku' ? 'kutip buku' : 'homework') + ' baharu perlu internet.</div>' : '') +
       (tab === 'buku'
         ? '<button class="btn block" data-act="tt-baru" data-id="' + k.id + '" data-jenis="buku">' + I.qr.replace(/width="34" height="34"/, 'width="22" height="22"') + ' Kutip buku baharu</button>'
-        : '<button class="btn block" data-act="tt-baru" data-id="' + k.id + '" data-jenis="kr">+ Kerja rumah baharu</button>') +
+        : '<button class="btn block" data-act="tt-baru" data-id="' + k.id + '" data-jenis="kr">+ Homework baharu</button>') +
       (list.length ? '<div class="card list-card">' + list.map(function (t) {
         var info = t.ditanda ? t.siap + '/' + bil + ' ' + kt.ya.toLowerCase() : 'Belum ditanda';
         return '<a class="list-item" href="#/modul/tasktrack/' + k.id + '/' + t.id + '"><span class="grow"><b style="display:block;font-size:15px">' + esc(t.tajuk) + '</b><span class="sub">' + esc(labelTarikh(t.tarikh, true)) + ' · ' + info + '</span></span>' +
           (t.tidak_siap ? '<span class="chip" style="background:#FFEDD5;color:#C2410C">' + t.tidak_siap + (tab === 'buku' ? ' tak hantar' : ' tak siap') + '</span>' : (t.ditanda ? '<span class="chip" style="background:var(--tint-now);color:var(--ok)">' + I.check + '</span>' : '')) +
           '<span class="muted">' + I.chev + '</span></a>';
       }).join('') + '</div>'
-      : '<div class="card empty"><p class="sub">' + (tab === 'buku' ? 'Belum ada rekod kutip buku. Tekan <b>Kutip buku baharu</b>: taip nama buku, kemudian kamera terus dibuka untuk scan.' : 'Belum ada kerja rumah. Tekan <b>+ Kerja rumah baharu</b> untuk mula.') + '</p></div>') +
+      : '<div class="card empty"><p class="sub">' + (tab === 'buku' ? 'Belum ada rekod kutip buku. Tekan <b>Kutip buku baharu</b>: taip nama buku, kemudian kamera terus dibuka untuk scan.' : 'Belum ada homework. Tekan <b>+ Homework baharu</b> untuk mula.') + '</p></div>') +
     '</div>';
   }
 
@@ -1628,7 +1628,7 @@
   function sebabPerhatian(x, had) {
     var r = [], ph = pct(x.hadir_ya, x.hadir_jum);
     if (x.hadir_jum && ph < had.had_hadir) r.push('Hadir ' + ph + '%');
-    if (x.kr_tak >= had.had_kr) r.push(x.kr_tak + ' KR tak siap');
+    if (x.kr_tak >= had.had_kr) r.push(x.kr_tak + ' Homework tak siap');
     if (x.tp_bil && Number(x.tp_purata) < Number(had.had_tp)) r.push('TP purata ' + nomb(x.tp_purata));
     if (x.mk_bil && Number(x.mk_pct) < had.had_markah) r.push('Markah ' + Math.round(x.mk_pct) + '%');
     return r;
@@ -1715,18 +1715,18 @@
       '<button class="btn block" data-act="an-laporan">' + I.print + ' Laporan (PDF)</button>' +
       '<div class="an-tiles">' +
         tile('Hadir', rk.hadir === null ? null : rk.hadir + '%', 'purata kelas') +
-        tile('KR siap', rk.kr === null ? null : rk.kr + '%', 'semua tugasan') +
+        tile('Homework siap', rk.kr === null ? null : rk.kr + '%', 'semua tugasan') +
         tile('Purata TP', rk.tp === null ? null : nomb(rk.tp), 'TP semasa') +
         tile('Markah', rk.mk === null ? null : Math.round(rk.mk) + '%', 'kuiz & periksa') +
       '</div>' +
       '<div class="card an-card"><div class="between"><b>⚠ Perlu perhatian</b><button class="icon-sm" data-act="an-had" aria-label="Tetapkan had perhatian">' + I.gear + '</button></div>' +
-        '<span class="sub">Hadir &lt; ' + an.had.had_hadir + '% · KR tak siap ≥ ' + an.had.had_kr + ' · TP &lt; ' + nomb(an.had.had_tp) + ' · Markah &lt; ' + an.had.had_markah + '%</span>' +
+        '<span class="sub">Hadir &lt; ' + an.had.had_hadir + '% · Homework tak siap ≥ ' + an.had.had_kr + ' · TP &lt; ' + nomb(an.had.had_tp) + ' · Markah &lt; ' + an.had.had_markah + '%</span>' +
         (perhatian.length ? '<div class="list-card" style="margin-top:6px">' + perhatian.map(function (o) {
           return '<button class="list-row" data-act="profil-murid" data-id="' + o.m.id + '"><span class="grow" style="min-width:0"><b style="display:block;font-size:14px">' + esc(o.m.nama) + '</b><span class="row" style="gap:4px;flex-wrap:wrap;margin-top:3px">' + o.r.map(function (r) { return '<span class="chip an-chip">' + esc(r) + '</span>'; }).join('') + '</span></span><span class="muted">' + I.chev + '</span></button>';
         }).join('') + '</div>' : '<p class="sub" style="margin:6px 0 0">Tiada murid. Bagus!</p>') +
       '</div>' +
       '<div class="card an-card"><b>Kehadiran</b>' + cartaHadir + (kerapTak.length ? '<span class="an-sub">Paling kerap tidak hadir</span>' + senaraiMurid(kerapTak, function (x) { return (x.hadir_jum - x.hadir_ya) + ' kali'; }) : '') + '</div>' +
-      '<div class="card an-card"><b>Kerja rumah</b>' + cartaKr + (kerapKr.length ? '<span class="an-sub">Paling banyak tertunggak</span>' + senaraiMurid(kerapKr, function (x) { return x.kr_tak + ' KR'; }) : '') + '</div>' +
+      '<div class="card an-card"><b>Homework</b>' + cartaKr + (kerapKr.length ? '<span class="an-sub">Paling banyak tertunggak</span>' + senaraiMurid(kerapKr, function (x) { return x.kr_tak + ' homework'; }) : '') + '</div>' +
       '<div class="card an-card"><b>PBD</b><span class="sub">TP semasa setiap Bab (tidak ikut tempoh)</span>' + cartaPbd + '</div>' +
       '<div class="card an-card"><b>Kuiz &amp; peperiksaan</b><span class="sub">Purata kelas sebagai % markah penuh</span>' + cartaNilai + '</div>' +
     '</div>';
@@ -1749,7 +1749,7 @@
     openSheet('<h2>Had "Perlu perhatian"</h2><p class="sub" style="margin:0">Murid masuk senarai jika memenuhi <b>mana-mana</b> satu syarat. Tetapan ini untuk semua kelas anda.</p>' +
       '<form class="stack" style="gap:12px" data-form="had" novalidate>' +
         f('had_hadir', 'Kehadiran di bawah (%)', h.had_hadir, 0, 100, 1) +
-        f('had_kr', 'Kerja rumah tak siap sekurang-kurangnya', h.had_kr, 1, 50, 1) +
+        f('had_kr', 'Homework tak siap sekurang-kurangnya', h.had_kr, 1, 50, 1) +
         f('had_tp', 'Purata TP di bawah', nomb(h.had_tp), 1, 6, 0.5) +
         f('had_markah', 'Purata markah di bawah (%)', h.had_markah, 0, 100, 1) +
         '<p class="error" data-err></p><button class="btn block" type="submit">Simpan</button><button class="btn ghost block" type="button" data-act="had-asal">Guna had cadangan</button></form>',
@@ -1759,7 +1759,7 @@
     var err = form.querySelector('[data-err]');
     var v = { had_hadir: parseInt(form.had_hadir.value, 10), had_kr: parseInt(form.had_kr.value, 10), had_tp: parseFloat(form.had_tp.value), had_markah: parseInt(form.had_markah.value, 10) };
     if (!(v.had_hadir >= 0 && v.had_hadir <= 100) || !(v.had_markah >= 0 && v.had_markah <= 100)) { err.textContent = 'Peratus mesti antara 0 dan 100.'; return; }
-    if (!(v.had_kr >= 1 && v.had_kr <= 50)) { err.textContent = 'Kerja rumah mesti antara 1 dan 50.'; return; }
+    if (!(v.had_kr >= 1 && v.had_kr <= 50)) { err.textContent = 'Homework mesti antara 1 dan 50.'; return; }
     if (!(v.had_tp >= 1 && v.had_tp <= 6)) { err.textContent = 'TP mesti antara 1 dan 6.'; return; }
     v.guru_id = S.session.user.id;
     var r = await sb.from('tetapan_guru').upsert(v, { onConflict: 'guru_id' });
@@ -1838,7 +1838,7 @@
     var bab = {}, urut = [];
     an.pbd.forEach(function (r) { if (!bab[r.item_id]) { bab[r.item_id] = { tajuk: r.tajuk, tp: {} }; urut.push(bab[r.item_id]); } bab[r.item_id].tp[r.tp] = r.bil; });
     var muka1 = '<div class="label-page lap-page">' + kepalaLaporan(k, an, 'Laporan Kelas') +
-      '<div class="lap-tiles"><div><span>Kehadiran</span><b>' + (rk.hadir === null ? '–' : rk.hadir + '%') + '</b></div><div><span>Kerja rumah siap</span><b>' + (rk.kr === null ? '–' : rk.kr + '%') + '</b></div><div><span>Purata TP</span><b>' + (rk.tp === null ? '–' : nomb(rk.tp)) + '</b></div><div><span>Purata markah</span><b>' + (rk.mk === null ? '–' : Math.round(rk.mk) + '%') + '</b></div><div><span>Bil. murid</span><b>' + murid.length + '</b></div></div>' +
+      '<div class="lap-tiles"><div><span>Kehadiran</span><b>' + (rk.hadir === null ? '–' : rk.hadir + '%') + '</b></div><div><span>Homework siap</span><b>' + (rk.kr === null ? '–' : rk.kr + '%') + '</b></div><div><span>Purata TP</span><b>' + (rk.tp === null ? '–' : nomb(rk.tp)) + '</b></div><div><span>Purata markah</span><b>' + (rk.mk === null ? '–' : Math.round(rk.mk) + '%') + '</b></div><div><span>Bil. murid</span><b>' + murid.length + '</b></div></div>' +
       '<h3>Taburan TP setiap Bab</h3>' + (urut.length ? '<table class="lap-t"><thead><tr><th>Bab</th>' + [1, 2, 3, 4, 5, 6].map(function (t) { return '<th class="c">TP' + t + '</th>'; }).join('') + '</tr></thead><tbody>' +
         urut.map(function (b) { return '<tr><td>' + esc(b.tajuk) + '</td>' + [1, 2, 3, 4, 5, 6].map(function (t) { return '<td class="c">' + (b.tp[t] || '') + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table>' : '<p class="lap-kosong">Belum ada TP direkod.</p>') +
       '<h3>Kuiz &amp; peperiksaan</h3>' + (an.nilai.length ? '<table class="lap-t"><thead><tr><th>Penilaian</th><th>Tarikh</th><th class="c">Dimasuk</th><th class="c">Purata</th><th class="c">%</th></tr></thead><tbody>' +
@@ -1848,13 +1848,13 @@
     for (var i = 0; i < Math.max(murid.length, 1); i += per) {
       var cebis = murid.slice(i, i + per);
       halaman.push('<div class="label-page lap-page">' + kepalaLaporan(k, an, 'Laporan Kelas — Senarai Murid' + (murid.length > per ? ' (' + (i / per + 1) + '/' + Math.ceil(murid.length / per) + ')' : '')) +
-        '<table class="lap-t lap-murid"><thead><tr><th class="c">No</th><th>Nama</th><th class="c">Hadir</th><th class="c">KR siap</th><th class="c">Purata TP</th><th class="c">Markah</th><th>Perhatian</th></tr></thead><tbody>' +
+        '<table class="lap-t lap-murid"><thead><tr><th class="c">No</th><th>Nama</th><th class="c">Hadir</th><th class="c">Homework siap</th><th class="c">Purata TP</th><th class="c">Markah</th><th>Perhatian</th></tr></thead><tbody>' +
         cebis.map(function (m, j) {
           var x = info[m.id] || { hadir_jum: 0, hadir_ya: 0, kr_jum: 0, kr_siap: 0, kr_tak: 0, tp_bil: 0, mk_bil: 0 };
           var r = sebabPerhatian(x, an.had);
           return '<tr><td class="c">' + (m.no || i + j + 1) + '</td><td>' + esc(m.nama) + '</td><td class="c">' + (x.hadir_jum ? pct(x.hadir_ya, x.hadir_jum) + '%' : '–') + '</td><td class="c">' + (x.kr_jum ? x.kr_siap + '/' + x.kr_jum : '–') + '</td><td class="c">' + (x.tp_bil ? nomb(x.tp_purata) : '–') + '</td><td class="c">' + (x.mk_bil ? Math.round(x.mk_pct) + '%' : '–') + '</td><td class="lap-r">' + esc(r.join(', ')) + '</td></tr>';
         }).join('') + '</tbody></table>' +
-        '<p class="lap-nota">Perhatian: hadir &lt; ' + an.had.had_hadir + '%, KR tak siap ≥ ' + an.had.had_kr + ', purata TP &lt; ' + nomb(an.had.had_tp) + ', purata markah &lt; ' + an.had.had_markah + '%. PBD ialah TP semasa (tidak ikut tempoh).</p></div>');
+        '<p class="lap-nota">Perhatian: hadir &lt; ' + an.had.had_hadir + '%, Homework tak siap ≥ ' + an.had.had_kr + ', purata TP &lt; ' + nomb(an.had.had_tp) + ', purata markah &lt; ' + an.had.had_markah + '%. PBD ialah TP semasa (tidak ikut tempoh).</p></div>');
     }
     return halaman.join('');
   }
@@ -1912,7 +1912,7 @@
     var x = d.x;
     var bahagian = [
       ['Tidak hadir', d.tak.length ? d.tak.slice(0, 6).join(', ') + (d.tak.length > 6 ? ' dan ' + (d.tak.length - 6) + ' lagi' : '') : 'Tiada.'],
-      ['Kerja rumah belum siap', d.kr.length ? d.kr.slice(0, 6).join(', ') + (d.kr.length > 6 ? ' dan ' + (d.kr.length - 6) + ' lagi' : '') : 'Tiada.'],
+      ['Homework belum siap', d.kr.length ? d.kr.slice(0, 6).join(', ') + (d.kr.length > 6 ? ' dan ' + (d.kr.length - 6) + ' lagi' : '') : 'Tiada.'],
       ['PBD', d.tp.length ? d.tp.slice(0, 10).map(function (t) { return t.tajuk + ' — TP' + t.tp; }).join('\n') : 'Belum ada TP direkod.'],
       ['Kuiz & peperiksaan', d.mk.length ? d.mk.slice(0, 6).join('\n') : 'Tiada markah tahun ini.'],
       ['Ulasan guru', d.ulasan]
@@ -1930,7 +1930,7 @@
     g.textBaseline = 'alphabetic'; g.fillStyle = '#0F172A'; g.font = '800 50px ' + F;
     balut(d.nama, 50, '800', lebar).forEach(function (l) { g.fillText(l, P, y); y += 60; });
     g.fillStyle = '#475569'; g.font = '600 30px ' + F; g.fillText(d.kelas + ' · Tahun ini', P, y); y += 40;
-    var tiles = [['Kehadiran', x.hadir_jum ? pct(x.hadir_ya, x.hadir_jum) + '%' : '–'], ['KR siap', x.kr_jum ? x.kr_siap + '/' + x.kr_jum : '–'], ['Purata TP', x.tp_bil ? nomb(x.tp_purata) : '–'], ['Markah', x.mk_bil ? Math.round(x.mk_pct) + '%' : '–']];
+    var tiles = [['Kehadiran', x.hadir_jum ? pct(x.hadir_ya, x.hadir_jum) + '%' : '–'], ['Homework siap', x.kr_jum ? x.kr_siap + '/' + x.kr_jum : '–'], ['Purata TP', x.tp_bil ? nomb(x.tp_purata) : '–'], ['Markah', x.mk_bil ? Math.round(x.mk_pct) + '%' : '–']];
     var tw = (lebar - 3 * 16) / 4;
     tiles.forEach(function (t, i) {
       var tx = P + i * (tw + 16);
@@ -1993,7 +1993,7 @@
       p = pct(x.hadir_ya, x.hadir_jum);
       ay.push(p >= 95 ? n + ' hadir dengan sangat konsisten (' + p + '%).' : p >= had.had_hadir ? 'Kehadiran ' + n + ' baik (' + p + '%).' : 'Kehadiran ' + n + ' perlu diberi perhatian (' + p + '%); kerjasama ibu bapa amat dihargai.');
     }
-    if (x.kr_jum) ay.push(x.kr_tak === 0 ? 'Semua kerja rumah disiapkan.' : x.kr_tak < had.had_kr ? 'Kebanyakan kerja rumah disiapkan (' + x.kr_siap + '/' + x.kr_jum + ').' : 'Terdapat ' + x.kr_tak + ' kerja rumah yang belum disiapkan; mohon dipantau di rumah.');
+    if (x.kr_jum) ay.push(x.kr_tak === 0 ? 'Semua homework disiapkan.' : x.kr_tak < had.had_kr ? 'Kebanyakan homework disiapkan (' + x.kr_siap + '/' + x.kr_jum + ').' : 'Terdapat ' + x.kr_tak + ' homework yang belum disiapkan; mohon dipantau di rumah.');
     if (x.tp_bil) {
       var t = Number(x.tp_purata);
       ay.push(t >= 5 ? 'Penguasaan PBD sangat baik (purata TP ' + nomb(t) + ').' : t >= Number(had.had_tp) ? 'Penguasaan PBD memuaskan (purata TP ' + nomb(t) + ').' : 'Penguasaan beberapa Bab masih di tahap awal (purata TP ' + nomb(t) + '); latihan tambahan disyorkan.');
@@ -2023,9 +2023,9 @@
     var nilaiAda = an.nilai.filter(function (p) { return mkM[p.id] !== undefined; }).slice(0, 12);
     return '<div class="label-page lap-page">' + kepalaLaporan(k, an, 'Laporan Prestasi Murid') +
       '<div class="lap-murid-head"><b>' + esc(m.nama) + '</b><span>No. giliran: ' + (m.no || '–') + '</span></div>' +
-      '<div class="lap-tiles"><div><span>Kehadiran</span><b>' + (x.hadir_jum ? pct(x.hadir_ya, x.hadir_jum) + '%' : '–') + '</b><small>' + x.hadir_ya + '/' + x.hadir_jum + ' hari</small></div><div><span>Kerja rumah siap</span><b>' + (x.kr_jum ? x.kr_siap + '/' + x.kr_jum : '–') + '</b><small>' + x.kr_tak + ' belum siap</small></div><div><span>Purata TP</span><b>' + (x.tp_bil ? nomb(x.tp_purata) : '–') + '</b><small>' + x.tp_bil + ' Bab</small></div><div><span>Purata markah</span><b>' + (x.mk_bil ? Math.round(x.mk_pct) + '%' : '–') + '</b><small>' + x.mk_bil + ' penilaian</small></div></div>' +
+      '<div class="lap-tiles"><div><span>Kehadiran</span><b>' + (x.hadir_jum ? pct(x.hadir_ya, x.hadir_jum) + '%' : '–') + '</b><small>' + x.hadir_ya + '/' + x.hadir_jum + ' hari</small></div><div><span>Homework siap</span><b>' + (x.kr_jum ? x.kr_siap + '/' + x.kr_jum : '–') + '</b><small>' + x.kr_tak + ' belum siap</small></div><div><span>Purata TP</span><b>' + (x.tp_bil ? nomb(x.tp_purata) : '–') + '</b><small>' + x.tp_bil + ' Bab</small></div><div><span>Purata markah</span><b>' + (x.mk_bil ? Math.round(x.mk_pct) + '%' : '–') + '</b><small>' + x.mk_bil + ' penilaian</small></div></div>' +
       '<div class="lap-2col"><div><h3>Tidak hadir</h3>' + (tak.length ? '<ul>' + tak.slice(0, 12).map(function (r) { return '<li>' + esc(labelTarikh(r.tarikh, true).replace('Hari ini · ', '')) + (r.sebab ? ' — ' + esc(r.sebab) : '') + '</li>'; }).join('') + (tak.length > 12 ? '<li>dan ' + (tak.length - 12) + ' lagi</li>' : '') + '</ul>' : '<p class="lap-kosong">Tiada.</p>') + '</div>' +
-      '<div><h3>Kerja rumah belum siap</h3>' + (kr.length ? '<ul>' + kr.slice(0, 12).map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + (kr.length > 12 ? '<li>dan ' + (kr.length - 12) + ' lagi</li>' : '') + '</ul>' : '<p class="lap-kosong">Tiada.</p>') + '</div></div>' +
+      '<div><h3>Homework belum siap</h3>' + (kr.length ? '<ul>' + kr.slice(0, 12).map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + (kr.length > 12 ? '<li>dan ' + (kr.length - 12) + ' lagi</li>' : '') + '</ul>' : '<p class="lap-kosong">Tiada.</p>') + '</div></div>' +
       '<h3>PBD (TP semasa)</h3>' + (babAda.length ? '<table class="lap-t"><thead><tr><th>Bab</th><th class="c" style="width:22mm">TP</th></tr></thead><tbody>' + babAda.map(function (it) { return '<tr><td>' + esc(it.tajuk) + '</td><td class="c"><b>TP' + tpM[it.id] + '</b></td></tr>'; }).join('') + '</tbody></table>' : '<p class="lap-kosong">Belum ada TP direkod.</p>') +
       '<h3>Kuiz &amp; peperiksaan</h3>' + (nilaiAda.length ? '<table class="lap-t"><thead><tr><th>Penilaian</th><th class="c">Markah</th><th class="c">%</th>' + (S.gred ? '<th class="c">Gred</th>' : '') + '<th class="c">Purata kelas</th></tr></thead><tbody>' + nilaiAda.map(function (p) { var pc = Math.round(mkM[p.id] / p.markah_penuh * 100); return '<tr><td>' + (p.jenis === 'kuiz' ? 'Kuiz' : 'Peperiksaan') + ' · ' + esc(p.tajuk) + '</td><td class="c">' + nomb(mkM[p.id]) + '/' + nomb(p.markah_penuh) + '</td><td class="c">' + pc + '%</td>' + (S.gred ? '<td class="c"><b>' + esc(gredUntuk(pc)) + '</b></td>' : '') + '<td class="c">' + Math.round(p.purata / p.markah_penuh * 100) + '%</td></tr>'; }).join('') + '</tbody></table>' : '<p class="lap-kosong">Tiada markah dalam tempoh ini.</p>') +
       '<h3>Ulasan guru</h3><div class="lap-ulasan" contenteditable="true" spellcheck="false">' + esc(ulasanAuto(m, x, an.had, babAda.map(function (it) { return { tajuk: it.tajuk, tp: tpM[it.id] }; }))) + '</div><div class="lap-garis"></div>' +
@@ -2063,7 +2063,7 @@
         return '<a class="list-item" href="#/urus/kelas/' + k.id + '"><span class="kelas-av" style="width:40px;height:40px;border-radius:13px;font-size:14px;background:' + w.g + ';--dot:' + w.dot + '"><span>' + esc(kodKelas(k.nama)) + '</span></span><span class="grow"><b style="display:block">' + esc(k.nama) + '</b><span class="sub">' + esc((k.subjek ? k.subjek + ' · ' : '') + bilMurid(k.id) + ' murid') + '</span></span><span class="muted">' + I.chev + '</span></a>';
       }).join('') + '</div>' : '<p class="sub">Belum ada kelas.</p>') +
       '<span class="section-title">Data saya</span>' +
-      '<div class="card stack" style="padding:16px;gap:10px"><b>Muat turun semua data</b><span class="sub">Satu fail CSV (boleh dibuka dengan Excel atau Google Sheets) mengandungi semua murid, kehadiran, kerja rumah, TP dan markah anda. Simpan sebagai salinan pendua, contohnya sebulan sekali.</span><button class="btn secondary" data-act="eksport-csv">' + I.download + ' Muat turun CSV</button></div>' +
+      '<div class="card stack" style="padding:16px;gap:10px"><b>Muat turun semua data</b><span class="sub">Satu fail CSV (boleh dibuka dengan Excel atau Google Sheets) mengandungi semua murid, kehadiran, homework, TP dan markah anda. Simpan sebagai salinan pendua, contohnya sebulan sekali.</span><button class="btn secondary" data-act="eksport-csv">' + I.download + ' Muat turun CSV</button></div>' +
       (admin ? '<span class="section-title">Admin</span><div class="card stack" style="padding:16px;gap:12px" data-admin-kod><span class="sub">Memuatkan kod…</span></div><div class="card list-card" data-admin-guru><div class="list-item sub">Memuatkan senarai guru…</div></div>' : '') +
     '</div>';
     $app.querySelector('.page').insertAdjacentHTML('beforeend', '<p class="sub" style="text-align:center;margin:8px 0 0">EduTrack versi ' + VERSI + '</p>');
@@ -2409,14 +2409,14 @@
       '<div class="between"><b style="font-size:16px">Tindakan</b>' + (links.length > 1 ? '' : '<span class="sub">' + esc(k.nama + (k.subjek ? ' · ' + k.subjek : '')) + '</span>') + '</div>' +
       (links.length > 1 ? '<div class="row" style="gap:6px;flex-wrap:wrap">' + links.map(function (x) { return '<button class="chip tdk-kelas' + (x.id === k.id ? ' on' : '') + '" data-act="tdk-kelas" data-id="' + x.id + '">' + esc(x.nama + (x.subjek ? ' · ' + x.subjek : '')) + '</button>'; }).join('') + '</div>' : '') +
       '<p class="sub" style="margin:-6px 0 0">Untuk murid ini sahaja. Untuk seluruh kelas, guna <b>Penilaian</b> / <b>Buku</b>.</p>' +
-      (t.luar ? '<div class="luar-nota" style="padding:8px 10px">Tiada internet: tanda kerja rumah disimpan dalam telefon; PBD perlu internet.</div>' : '') +
+      (t.luar ? '<div class="luar-nota" style="padding:8px 10px">Tiada internet: tanda homework disimpan dalam telefon; PBD perlu internet.</div>' : '') +
       '<div class="stack" style="gap:6px"><span class="tdk-h">PBD</span>' +
         (t.bab.length ? '<select class="input" data-input="tdk-bab" aria-label="Pilih Bab">' + t.bab.map(function (b) { return '<option value="' + b.id + '"' + (b.id === t.babPilih ? ' selected' : '') + '>' + esc(b.tajuk) + (t.tp[b.id] ? ' — TP' + t.tp[b.id] : '') + '</option>'; }).join('') + '</select>' +
           '<div class="tp-pilih">' + [1, 2, 3, 4, 5, 6].map(function (n) { var on = bab && t.tp[bab.id] === n, w = TP_WARNA[n]; return '<button class="tp-btn" data-act="tdk-tp" data-v="' + n + '" aria-pressed="' + on + '" style="background:' + w[0] + ';color:' + w[1] + '"><b>TP' + n + '</b></button>'; }).join('') + '</div>' +
           '<span class="sub">Tekan TP yang sama sekali lagi untuk padam.</span>'
         : '<p class="sub" style="margin:0">Belum ada Bab untuk subjek ini. Tulis Bab dalam Penilaian.</p>') +
       '</div>' +
-      '<div class="stack" style="gap:6px"><span class="tdk-h">Kerja rumah</span>' + senaraiTugasan('kr') + '</div>' +
+      '<div class="stack" style="gap:6px"><span class="tdk-h">Homework</span>' + senaraiTugasan('kr') + '</div>' +
       butangSimpanTdk() +
     '</div>';
   }
@@ -2470,7 +2470,7 @@
     u.st.forEach(function (id) { stNilai[id] = t.st[id]; }); u.tp.forEach(function (id) { tpNilai[id] = t.tp[id] || null; });
     if (u.st.length) {
       var r1 = await simpanRekod('status_tugasan', u.st.map(function (id) { return { tugasan_id: id, murid_id: t.muridId, siap: stNilai[id] }; }));
-      if (r1.error) gagal.push('Kerja rumah: ' + errMsg(r1.error));
+      if (r1.error) gagal.push('Homework: ' + errMsg(r1.error));
       else { u.st.forEach(function (id) { t.stAsal[id] = stNilai[id]; }); if (r1.luar) luar = true; }
     }
     var naik = u.tp.filter(function (id) { return tpNilai[id]; }), padam = u.tp.filter(function (id) { return !tpNilai[id]; });
@@ -2549,7 +2549,7 @@
     var data = semua.filter(function (x) { return x.tugasan.jenis !== 'buku'; });
     var bukuTak = semua.filter(function (x) { return x.tugasan.jenis === 'buku' && !x.siap; }).sort(function (a, b) { return a.tugasan.tarikh < b.tugasan.tarikh ? 1 : -1; });
     var nBuku = bukuTak.length ? '<span class="sub" style="display:block;margin-top:6px"><b>Buku tidak hantar:</b> ' + bukuTak.slice(0, 5).map(function (h) { return esc(h.tugasan.tajuk); }).join(', ') + (bukuTak.length > 5 ? ' dan ' + (bukuTak.length - 5) + ' lagi' : '') + '</span>' : '';
-    if (!data.length) { el.innerHTML = '<b style="display:block">Buku</b><span class="sub">Belum ada rekod kerja rumah.</span>' + nBuku; return; }
+    if (!data.length) { el.innerHTML = '<b style="display:block">Buku</b><span class="sub">Belum ada rekod homework.</span>' + nBuku; return; }
     var perKelas = links.map(function (x) {
       var d = data.filter(function (h) { return h.tugasan.kelas_id === x.k.id; });
       return { k: x.k, jumlah: d.length, siap: d.filter(function (h) { return h.siap; }).length };
@@ -2559,7 +2559,7 @@
       perKelas.map(function (x) {
         return '<span class="sub" style="display:block">' + esc(x.k.nama + (x.k.subjek ? ' · ' + x.k.subjek : '')) + ': <b>' + x.siap + '/' + x.jumlah + '</b> siap</span>';
       }).join('') +
-      (tak.length ? '<span class="sub" style="display:block;margin-top:6px;color:#C2410C"><b>Belum siap:</b> ' + tak.slice(0, 5).map(function (h) { return esc(h.tugasan.tajuk); }).join(', ') + (tak.length > 5 ? ' dan ' + (tak.length - 5) + ' lagi' : '') + '</span>' : '<span class="sub" style="display:block;margin-top:6px">Tiada kerja rumah tertunggak.</span>') + nBuku;
+      (tak.length ? '<span class="sub" style="display:block;margin-top:6px;color:#C2410C"><b>Belum siap:</b> ' + tak.slice(0, 5).map(function (h) { return esc(h.tugasan.tajuk); }).join(', ') + (tak.length > 5 ? ' dan ' + (tak.length - 5) + ' lagi' : '') + '</span>' : '<span class="sub" style="display:block;margin-top:6px">Tiada homework tertunggak.</span>') + nBuku;
   }
 
   async function muatAsMurid(muridId) {
@@ -2865,7 +2865,7 @@
       }
       S.kelas.forEach(function (k) { muridKelas(k.id).forEach(function (m) { b('Murid', k.id, m.id, '', 'Senarai murid', '', ''); }); });
       res[0].forEach(function (r) { b('Kehadiran', r.kelas_id, r.murid_id, r.tarikh, 'Kehadiran', r.hadir ? 'Hadir' : 'Tidak hadir', r.sebab); });
-      res[1].forEach(function (r) { if (!r.tugasan) return; var bk = r.tugasan.jenis === 'buku'; b(bk ? 'Kutip buku' : 'Kerja rumah', r.tugasan.kelas_id, r.murid_id, r.tugasan.tarikh, r.tugasan.tajuk, bk ? (r.siap ? 'Hantar' : 'Tidak hantar') : (r.siap ? 'Siap' : 'Tidak siap'), ''); });
+      res[1].forEach(function (r) { if (!r.tugasan) return; var bk = r.tugasan.jenis === 'buku'; b(bk ? 'Kutip buku' : 'Homework', r.tugasan.kelas_id, r.murid_id, r.tugasan.tarikh, r.tugasan.tajuk, bk ? (r.siap ? 'Hantar' : 'Tidak hantar') : (r.siap ? 'Siap' : 'Tidak siap'), ''); });
       res[2].forEach(function (r) { if (r.pbd_item) b('PBD', r.kelas_id, r.murid_id, '', r.pbd_item.tajuk, 'TP' + r.tp, ''); });
       res[3].forEach(function (r) { var p = r.penilaian; if (p) b(p.jenis === 'kuiz' ? 'Kuiz' : 'Peperiksaan', p.kelas_id, r.murid_id, p.tarikh, p.tajuk, nomb(r.markah) + '/' + nomb(p.markah_penuh), Math.round(r.markah / p.markah_penuh * 100) + '%'); });
       var csv = '﻿' + baris.map(function (r) { return r.map(sel).join(','); }).join('\r\n');
