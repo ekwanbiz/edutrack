@@ -12,7 +12,7 @@
   var $toast = document.getElementById('toast');
 
   /* Nombor versi app. Naikkan SERENTAK dengan version.json dan CACHE dalam sw.js. */
-  var VERSI = '27';
+  var VERSI = '28';
 
   var S = { session: null, profil: null, kelas: [], murid: [], loaded: false, q: '', authTab: 'masuk', recovery: false, scanner: null };
 
@@ -689,9 +689,9 @@
      Kiraan dari pangkalan data (RPC ikut RLS guru). */
   // Tahap warna (ditetapkan cikgu, versi 27). Ambang: [kuning, oren, merah].
   var TAHAP = [
-    { id: 'kuning', no: '#A16207', bg: '#FEF9C3', bd: '#FACC15' },
-    { id: 'oren', no: '#C2410C', bg: '#FFEDD5', bd: '#FB923C' },
-    { id: 'merah', no: '#B91C1C', bg: '#FEE2E2', bd: '#F87171' }
+    { id: 'kuning', ikon: '○', kata: 'Perhati', no: '#A16207', bg: '#FEF9C3', bd: '#FACC15' },
+    { id: 'oren', ikon: '●', kata: 'Pantau', no: '#C2410C', bg: '#FFEDD5', bd: '#FB923C' },
+    { id: 'merah', ikon: '⚠', kata: 'Tindakan segera', no: '#B91C1C', bg: '#FEE2E2', bd: '#F87171' }
   ];
   var NOTIF = [
     { id: 'lama', label: 'Tak hadir', had: [3, 5, 7], unit: 'hari', ikutMurid: true,
@@ -704,50 +704,100 @@
       nota: 'Murid dengan TP1 atau TP2 dalam sekurang-kurangnya satu Bab. Warna ikut bilangan murid: kuning 3, oren 7, merah 10.' }
   ];
   function tahapDari(had, n) { return n >= had[2] ? 2 : n >= had[1] ? 1 : n >= had[0] ? 0 : -1; }
+  var TUNDA_HARI = 7; // "Dah tangani" senyapkan notifikasi murid itu 7 hari, kecuali jadi lebih teruk
   async function muatNotif(kelasId) {
     var res = await Promise.all([
       sb.rpc('tak_hadir_berturut', { p_kelas: kelasId, p_min: 3 }),
       sb.rpc('kr_tertunggak', { p_kelas: kelasId }),
       sb.rpc('buku_tak_hantar', { p_kelas: kelasId }),
-      sb.rpc('tp_rendah', { p_kelas: kelasId, p_had: 2 })
+      sb.rpc('tp_rendah', { p_kelas: kelasId, p_had: 2 }),
+      sb.from('tindakan_notif').select('murid_id,jenis,tahap,tindakan,tunda_hingga,dicipta').eq('kelas_id', kelasId).gte('tunda_hingga', hariIni()).order('dicipta')
     ]);
-    var d = { kelasId: kelasId };
+    var tunda = {}; // tunda[jenis][murid] = rekod terkini
+    if (!res[4].error) (res[4].data || []).forEach(function (x) { (tunda[x.jenis] = tunda[x.jenis] || {})[x.murid_id] = x; });
+    var d = { kelasId: kelasId, kotak: [] };
     NOTIF.forEach(function (n, i) {
-      var r = res[i], m = {};
-      if (!r.error) (r.data || []).forEach(function (x) { m[x.murid_id] = x.bil || 1; });
-      d[n.id] = m; // ralat (cth. tiada internet) = tidak dipaparkan
+      var r = res[i], semua = {}, aktif = {}, senyap = {};
+      if (!r.error) (r.data || []).forEach(function (x) { semua[x.murid_id] = x.bil || 1; });
+      var ids = Object.keys(semua), tKelas = tahapDari(n.had, ids.length);
+      ids.forEach(function (id) {
+        var t = n.ikutMurid ? tahapDari(n.had, semua[id]) : tKelas, tg = tunda[n.id] && tunda[n.id][id];
+        if (n.ikutMurid && t < 0) return;
+        if (tg && t <= tg.tahap) senyap[id] = { bil: semua[id], t: t, rekod: tg }; // sudah ditangani & tidak lebih teruk
+        else aktif[id] = { bil: semua[id], t: t };
+      });
+      var aIds = Object.keys(aktif);
+      var tKotak = n.ikutMurid ? aIds.reduce(function (mx, id) { return Math.max(mx, aktif[id].t); }, -1) : (aIds.length ? tKelas : -1);
+      d[n.id] = { aktif: aktif, senyap: senyap };
+      if (tKotak >= 0) d.kotak.push({ n: n, bil: aIds.length, t: tKotak });
     });
     S.notif = d;
     var el = $app.querySelector('[data-notif]');
     if (!el || S.kelasTerakhir !== kelasId) return;
-    var kotak = NOTIF.map(function (n) {
-      var v = d[n.id], ids = Object.keys(v), t;
-      if (n.ikutMurid) t = ids.reduce(function (mx, id) { return Math.max(mx, tahapDari(n.had, v[id])); }, -1); // tahap murid paling teruk
-      else t = tahapDari(n.had, ids.length); // TP: ikut bilangan murid
-      return { n: n, bil: ids.length, t: t };
-    }).filter(function (x) { return x.t >= 0; });
-    el.hidden = !kotak.length;
-    el.innerHTML = kotak.map(function (x) {
+    el.hidden = !d.kotak.length;
+    el.innerHTML = d.kotak.map(function (x) {
       var w = TAHAP[x.t];
-      return '<button class="alert" data-act="notif" data-jenis="' + x.n.id + '" data-id="' + kelasId + '" data-tahap="' + w.id + '" style="background:' + w.bg + ';box-shadow:inset 0 0 0 2px ' + w.bd + '" aria-label="' + x.n.label + ': ' + x.bil + ' murid, tahap ' + w.id + '"><b style="color:' + w.no + '">' + x.bil + '</b><span>' + x.n.label + '</span></button>';
+      return '<button class="alert" data-act="notif" data-jenis="' + x.n.id + '" data-id="' + kelasId + '" data-tahap="' + w.id + '" style="background:' + w.bg + ';box-shadow:inset 0 0 0 2px ' + w.bd + '" aria-label="' + x.n.label + ': ' + x.bil + ' murid, ' + w.kata + '">' +
+        '<b style="color:' + w.no + '"><i class="tahap-ikon" aria-hidden="true">' + w.ikon + '</i>' + x.bil + '</b><span>' + x.n.label + '</span><small class="tahap-kata" style="color:' + w.no + '">' + w.kata + '</small></button>';
     }).join('');
+  }
+  function cipTahap(t, teks) {
+    var w = TAHAP[t];
+    return '<span class="chip" style="background:' + w.bg + ';color:' + w.no + '" title="' + w.kata + '">' + w.ikon + ' ' + teks + '</span>';
   }
   function sheetNotif(kelasId, jenis) {
     var n = NOTIF.filter(function (x) { return x.id === jenis; })[0], k = cariKelas(kelasId);
-    var bil = (S.notif && S.notif.kelasId === kelasId && S.notif[jenis]) || {};
-    var list = muridKelas(kelasId).filter(function (m) { return bil[m.id]; })
-      .sort(function (a, b) { return bil[b.id] - bil[a.id] || bandingNama(a, b); }); // paling teruk di atas
-    var tKotak = n.ikutMurid ? -1 : tahapDari(n.had, list.length);
-    var petunjuk = n.ikutMurid ? '<span class="sub">Kuning ' + n.had[0] + ' · Oren ' + n.had[1] + ' · Merah ' + n.had[2] + ' ' + n.unit + '</span>' : '';
+    var v = (S.notif && S.notif.kelasId === kelasId && S.notif[jenis]) || { aktif: {}, senyap: {} };
+    var susun = function (o) { return muridKelas(kelasId).filter(function (m) { return o[m.id]; }).sort(function (a, b) { return o[b.id].t - o[a.id].t || o[b.id].bil - o[a.id].bil || bandingNama(a, b); }); };
+    var aktif = susun(v.aktif), senyap = susun(v.senyap);
+    var petunjuk = '<span class="sub">' + TAHAP.map(function (w, i) { return w.ikon + ' ' + w.kata + ' ' + n.had[i] + (n.ikutMurid ? '' : ' murid'); }).join(' · ') + (n.ikutMurid ? ' ' + n.unit : '') + '</span>';
+    var baris = function (m) {
+      var x = v.aktif[m.id], w = TAHAP[x.t];
+      return '<div class="notif-row"><button class="list-row" data-act="profil-murid" data-id="' + m.id + '"><span class="murid-av" style="width:36px;height:36px;font-size:13px;background:' + w.bg + ';color:' + w.no + '">' + esc(inisial(m.nama)) + '</span><span class="grow" style="font-size:15px;font-weight:600">' + esc(m.nama) + '</span>' + cipTahap(x.t, x.bil + ' ' + n.unit) + '</button>' +
+        '<button class="btn secondary tangani-btn" data-act="tangani" data-jenis="' + jenis + '" data-id="' + kelasId + '" data-murid="' + m.id + '">Tangani</button></div>';
+    };
+    var barisSenyap = function (m) {
+      var x = v.senyap[m.id];
+      return '<button class="list-row senyap" data-act="profil-murid" data-id="' + m.id + '"><span class="murid-av" style="width:36px;height:36px;font-size:13px;background:var(--soft);color:var(--muted)">' + esc(inisial(m.nama)) + '</span><span class="grow"><b style="display:block;font-size:14px">' + esc(m.nama) + '</b><span class="sub">✓ ' + esc(x.rekod.tindakan) + ' · senyap hingga ' + labelTarikh(x.rekod.tunda_hingga) + '</span></span><span class="chip" style="background:var(--soft);color:var(--muted)">' + x.bil + ' ' + n.unit + '</span></button>';
+    };
     openSheet('<div class="between"><h2>' + n.label + '</h2><button class="icon-sm" data-act="sheet-close" aria-label="Tutup">' + I.close + '</button></div>' +
       '<p class="sub" style="margin:0">' + esc(k ? k.nama : '') + ' · ' + n.nota + '</p>' + petunjuk +
-      '<div class="sheet-scroll">' + (list.length ? list.map(function (m) {
-        var t = n.ikutMurid ? tahapDari(n.had, bil[m.id]) : tKotak, w = TAHAP[Math.max(0, t)];
-        var gaya = t >= 0 ? 'background:' + w.bg + ';color:' + w.no : 'background:var(--soft);color:var(--muted)';
-        return '<button class="list-row" data-act="profil-murid" data-id="' + m.id + '"><span class="murid-av" style="width:36px;height:36px;font-size:13px;' + gaya + '">' + esc(inisial(m.nama)) + '</span><span class="grow" style="font-size:15px;font-weight:600">' + esc(m.nama) + '</span>' +
-          '<span class="chip" style="' + gaya + '">' + bil[m.id] + ' ' + n.unit + '</span></button>';
-      }).join('') : '<p class="sub" style="padding:12px 2px">Tiada murid.</p>') + '</div>',
+      '<div class="sheet-scroll">' + (aktif.length ? aktif.map(baris).join('') : '<p class="sub" style="padding:12px 2px">Tiada murid yang perlu ditangani.</p>') +
+        (senyap.length ? '<span class="section-title" style="margin-top:12px">Sudah ditangani (' + senyap.length + ')</span>' + senyap.map(barisSenyap).join('') : '') +
+      '</div>',
       { label: n.label });
+  }
+
+  var PILIH_TINDAKAN = ['Hubungi ibu bapa', 'Bercakap dengan murid', 'Rujuk guru kelas / kaunselor', 'Bimbingan / kelas tambahan', 'Lain-lain'];
+  function sheetTangani(kelasId, jenis, muridId) {
+    var n = NOTIF.filter(function (x) { return x.id === jenis; })[0], m = muridKelas(kelasId).filter(function (x) { return x.id === muridId; })[0];
+    var x = S.notif && S.notif[jenis] && S.notif[jenis].aktif[muridId];
+    if (!n || !m || !x) return;
+    openSheet('<form class="stack" style="gap:12px" data-form="tangani" data-id="' + kelasId + '" data-jenis="' + jenis + '" data-murid="' + muridId + '" data-tahap="' + x.t + '" data-bil="' + x.bil + '" novalidate>' +
+      '<div class="between"><h2>Tangani</h2><button class="icon-sm" type="button" data-act="notif" data-jenis="' + jenis + '" data-id="' + kelasId + '" aria-label="Kembali ke senarai">' + I.close + '</button></div>' +
+      '<p style="margin:0"><b>' + esc(m.nama) + '</b><br><span class="sub">' + n.label + ' · </span>' + cipTahap(x.t, x.bil + ' ' + n.unit) + '</p>' +
+      '<fieldset class="tangani-pilih"><legend class="field"><span>Apa yang cikgu buat?</span></legend>' +
+        PILIH_TINDAKAN.map(function (p, i) { return '<label class="chip-radio"><input type="radio" name="pilih" value="' + p + '"' + (i === 0 ? ' checked' : '') + '><span>' + p + '</span></label>'; }).join('') +
+      '</fieldset>' +
+      '<label class="field"><span>Nota (pilihan)</span><textarea class="input catatan-in" name="nota" maxlength="200" placeholder="cth. Ibu kata murid demam"></textarea></label>' +
+      '<p class="sub" style="margin:0">Disimpan dalam Catatan murid. Notifikasi murid ini disenyapkan ' + TUNDA_HARI + ' hari, kecuali keadaan jadi lebih teruk.</p>' +
+      '<p class="error" data-err></p><button class="btn block" type="submit">Simpan tindakan</button>' +
+    '</form>', { label: 'Tangani' });
+  }
+  async function simpanTangani(form) {
+    var n = NOTIF.filter(function (x) { return x.id === form.dataset.jenis; })[0], btn = form.querySelector('[type=submit]'), err = form.querySelector('[data-err]');
+    var pilih = (form.querySelector('input[name=pilih]:checked') || {}).value || 'Lain-lain', nota = form.nota.value.trim();
+    var tindakan = pilih + (nota ? ': ' + nota : '');
+    var kelasId = form.dataset.id, muridId = form.dataset.murid, t = +form.dataset.tahap;
+    btn.disabled = true; err.textContent = '';
+    var r1 = await sb.from('tindakan_notif').insert({ murid_id: muridId, kelas_id: kelasId, jenis: n.id, tahap: t, tindakan: tindakan.slice(0, 300), tunda_hingga: tambahHari(hariIni(), TUNDA_HARI) });
+    if (r1.error) { btn.disabled = false; err.textContent = rangkaianGagal(r1.error) ? 'Perlu internet untuk simpan tindakan.' : errMsg(r1.error); return; }
+    // rekod juga dalam Catatan murid (supaya ada sejarah tindakan)
+    var r2 = await sb.from('catatan').insert({ murid_id: muridId, teks: (TAHAP[t].ikon + ' ' + n.label + ' (' + form.dataset.bil + ' ' + n.unit + '): ' + tindakan).slice(0, 500) });
+    if (r2.error) toast('Tindakan disimpan, tetapi catatan gagal: ' + errMsg(r2.error));
+    else tandaDisimpan();
+    await muatNotif(kelasId);
+    sheetNotif(kelasId, n.id);
   }
 
   function sheetMurid(kelasId, fokusCari) {
@@ -2583,6 +2633,7 @@
     'jana-qr': function (el) { janaQrBaru(el.dataset.id); },
     'alert': function () { toast('Akan aktif selepas modul Buku siap.'); },
     'notif': function (el) { sheetNotif(el.dataset.id, el.dataset.jenis); },
+    'tangani': function (el) { sheetTangani(el.dataset.id, el.dataset.jenis, el.dataset.murid); },
     'an-tempoh': function (el) { location.replace('#/modul/analisis/' + el.dataset.id + '/' + el.dataset.t); },
     'an-had': function () { sheetHad(); },
     'had-asal': function (el) { var f = el.closest('form'); Object.keys(HAD_ASAL).forEach(function (k) { f[k].value = HAD_ASAL[k]; }); },
@@ -2705,6 +2756,7 @@
   var FORM = {
     'tugasan': simpanTugasan,
     'catatan': simpanCatatan,
+    'tangani': simpanTangani,
     'pbd-tulis': simpanBab,
     'gred': function (form) { return simpanGred(form, false); },
     'had': simpanHad,
