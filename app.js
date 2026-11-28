@@ -12,7 +12,7 @@
   var $toast = document.getElementById('toast');
 
   /* Nombor versi app. Naikkan SERENTAK dengan version.json dan CACHE dalam sw.js. */
-  var VERSI = '12';
+  var VERSI = '13';
 
   var S = { session: null, profil: null, kelas: [], murid: [], loaded: false, q: '', authTab: 'masuk', recovery: false, scanner: null };
 
@@ -1056,9 +1056,9 @@
       (c.murid.length
         ? '<div class="tt-aksi">' +
             (c.kosong ? '<button class="btn" data-act="tt-semua" data-tt-semua>' + I.check + (c.mula ? ' Baki ' + kt.semua.toLowerCase() : ' ' + kt.semua) + '</button>' : '') +
-            '<button class="btn secondary" data-act="tt-kutip">' + I.qr.replace(/width="34" height="34"/, 'width="22" height="22"') + (tt.tugasan.jenis === 'buku' ? ' Scan buku' : ' Kutip Buku') + '</button>' +
+            (tt.tugasan.jenis === 'buku' ? '<button class="btn secondary" data-act="tt-kutip">' + I.qr.replace(/width="34" height="34"/, 'width="22" height="22"') + ' Scan buku</button>' : '') +
           '</div>' +
-          '<p class="sub" style="margin:0">' + (c.mula ? 'Tekan nama murid untuk tukar <b>' + kt.ya + ' / ' + kt.tak + '</b>.' : (tt.tugasan.jenis === 'buku' ? 'Tekan <b>Scan buku</b> untuk scan buku yang dihantar, atau <b>Semua hantar</b> lalu tekan nama yang tidak hantar.' : 'Tekan <b>Semua siap</b> lalu tekan nama yang tidak siap, atau guna <b>Kutip Buku</b> untuk scan buku yang dihantar.')) + '</p>' +
+          '<p class="sub" style="margin:0">' + (c.mula ? 'Tekan nama murid untuk tukar <b>' + kt.ya + ' / ' + kt.tak + '</b>.' : (tt.tugasan.jenis === 'buku' ? 'Tekan <b>Scan buku</b> untuk scan buku yang dihantar, atau <b>Semua hantar</b> lalu tekan nama yang tidak hantar.' : 'Tekan <b>Semua siap</b>, kemudian tekan nama murid yang tidak siap.')) + '</p>' +
           '<div class="ax-grid' + (c.mula ? '' : ' belum') + '" data-tt-grid>' + gridTugasan(c.murid) + '</div>'
         : '<div class="card empty"><p class="sub">Belum ada murid dalam kelas ini.</p><a class="btn" href="#/urus/kelas/' + k.id + '">Tambah murid</a></div>') +
     '</div>';
@@ -1092,7 +1092,7 @@
     if (!el || !S.tt) return;
     var c = kiraTT(), id = el.dataset.ttMurid, v = S.tt.rows[id];
     if (!c.mula) {
-      toast(S.tt.tugasan.jenis === 'buku' ? 'Tekan "Scan buku" atau "Semua hantar" dahulu.' : 'Tekan "Semua siap" atau "Kutip Buku" dahulu.');
+      toast(S.tt.tugasan.jenis === 'buku' ? 'Tekan "Scan buku" atau "Semua hantar" dahulu.' : 'Tekan "Semua siap" dahulu.');
       var b = $app.querySelector('[data-tt-semua]');
       if (b) { b.classList.remove('goyang'); void b.offsetWidth; b.classList.add('goyang'); }
       return;
