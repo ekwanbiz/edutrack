@@ -12,7 +12,7 @@
   var $toast = document.getElementById('toast');
 
   /* Nombor versi app. Naikkan SERENTAK dengan version.json dan CACHE dalam sw.js. */
-  var VERSI = '13';
+  var VERSI = '14';
 
   var S = { session: null, profil: null, kelas: [], murid: [], loaded: false, q: '', authTab: 'masuk', recovery: false, scanner: null };
 
@@ -634,6 +634,7 @@
   function renderKelas(id) {
     var k = cariKelas(id);
     if (!k) return go('#/');
+    S.kelasTerakhir = k.id;
     var w = warna(k.warna), bil = bilMurid(k.id);
     $app.innerHTML = '<div class="page">' +
       '<div class="banner" style="background:' + w.g + '">' +
@@ -2230,6 +2231,12 @@
           return '<a class="chip" style="background:var(--tint-now);color:var(--acc)" href="#/kelas/' + x.k.id + '">' + esc(x.k.nama + (x.k.subjek ? ' · ' + x.k.subjek : '')) + (x.no ? ' · No. ' + x.no : '') + '</a>';
         }).join('') + '</div>' +
       '</div>' +
+      (links.length ? '<div data-tindakan><div class="card" style="padding:14px 16px"><span class="sub">Memuatkan tindakan…</span></div></div>' : '') +
+      '<span class="section-title">Catatan</span>' +
+      '<div class="card stack" style="padding:14px 16px;gap:10px" data-catatan-box>' +
+        '<form class="row" style="gap:8px;align-items:flex-end" data-form="catatan" data-id="' + m.id + '" novalidate><textarea class="input grow catatan-in" name="teks" maxlength="500" rows="1" placeholder="cth. Lupa bawa buku, jumpa ibu bapa…" aria-label="Catatan baharu"></textarea><button class="btn" type="submit" style="min-height:48px">Simpan</button></form>' +
+        '<div data-catatan><span class="sub">Memuatkan…</span></div>' +
+      '</div>' +
       '<span class="section-title">Rekod</span>' +
       '<div class="card list-card">' +
         '<div class="list-item" style="align-items:flex-start">' + logo('attendx', 36) + '<span class="grow" data-prof-hadir><b style="display:block">AttendX</b><span class="sub">Memuatkan…</span></span></div>' +
@@ -2247,6 +2254,139 @@
     muatHadirMurid(m.id, links);
     muatKrMurid(m.id, links);
     muatAsMurid(m.id);
+    muatCatatan(m.id);
+    if (links.length) {
+      var pilih = links.filter(function (x) { return x.k.id === S.kelasTerakhir; })[0] || links[0];
+      muatTindakan(m.id, pilih.k.id);
+    }
+  }
+
+  /* ---------- Tindakan pantas dalam Student Profile (selepas scan QR) ---------- */
+  async function muatTindakan(muridId, kelasId) {
+    var box = $app.querySelector('[data-tindakan]');
+    if (!box) return;
+    var m = S.murid.filter(function (x) { return x.id === muridId; })[0], k = cariKelas(kelasId), hari = hariIni();
+    var links = (m.kelas_murid || []).map(function (l) { return cariKelas(l.kelas_id); }).filter(Boolean);
+    var res = await Promise.all([
+      sb.from('kehadiran').select('murid_id,hadir,sebab').eq('kelas_id', k.id).eq('tarikh', hari),
+      sb.rpc('ringkasan_tugasan', { p_kelas: k.id, p_had: 5, p_jenis: 'kr' }),
+      sb.rpc('ringkasan_tugasan', { p_kelas: k.id, p_had: 5, p_jenis: 'buku' }),
+      sb.rpc('ringkasan_pbd', { p_kelas: k.id }),
+      sb.from('pbd_tp').select('item_id,tp').eq('murid_id', muridId).eq('kelas_id', k.id)
+    ]);
+    if (!$app.querySelector('[data-tindakan]')) return;
+    var luar = res.some(function (r) { return r.error && rangkaianGagal(r.error); });
+    // kehadiran hari ini (pelayan atau salinan telefon) + rekod dalam peti
+    var hadirRows = {}, adaHari = false;
+    if (!res[0].error) { (res[0].data || []).forEach(function (r) { hadirRows[r.murid_id] = r; }); adaHari = (res[0].data || []).length > 0; }
+    else { var c = bacaLS('et_cache_ax_' + uid() + '_' + k.id, null); if (c && c.tarikh === hari) { hadirRows = c.rows || {}; adaHari = Object.keys(hadirRows).length > 0; } }
+    rekodLuar('kehadiran', function (r) { return r.kelas_id === k.id && r.tarikh === hari; }).forEach(function (r) { hadirRows[r.murid_id] = r; adaHari = true; });
+    var tugasan = (res[1].data || []).concat(res[2].data || []);
+    var stRes = tugasan.length ? await sb.from('status_tugasan').select('tugasan_id,siap').eq('murid_id', muridId).in('tugasan_id', tugasan.map(function (t) { return t.id; })) : { data: [] };
+    var st = {}; (stRes.data || []).forEach(function (x) { st[x.tugasan_id] = x.siap; });
+    rekodLuar('status_tugasan', function (r) { return r.murid_id === muridId; }).forEach(function (r) { st[r.tugasan_id] = r.siap; });
+    var tpM = {}; (res[4].data || []).forEach(function (x) { tpM[x.item_id] = x.tp; });
+    S.tdk = { muridId: muridId, kelasId: k.id, hadir: hadirRows[muridId] || null, adaHari: adaHari, st: st, tugasan: { kr: res[1].data || [], buku: res[2].data || [] }, bab: res[3].data || [], tp: tpM, babPilih: (S.tdk && S.tdk.kelasId === k.id && S.tdk.babPilih) || null, luar: luar };
+    if (!S.tdk.babPilih) { var b0 = S.tdk.bab.filter(function (b) { return !tpM[b.id]; })[0] || S.tdk.bab[0]; S.tdk.babPilih = b0 ? b0.id : null; }
+    lukisTindakan(links);
+  }
+
+  function lukisTindakan(links) {
+    var t = S.tdk, k = cariKelas(t.kelasId), box = $app.querySelector('[data-tindakan]');
+    if (!box) return;
+    if (!links) { var m = S.murid.filter(function (x) { return x.id === t.muridId; })[0]; links = (m.kelas_murid || []).map(function (l) { return cariKelas(l.kelas_id); }).filter(Boolean); }
+    var h = t.hadir, tak = h && h.hadir === false;
+    function seg(aktif, butang) {
+      return '<div class="tdk-seg">' + butang.map(function (b) { return '<button data-act="' + b[0] + '"' + b[2] + ' aria-pressed="' + (aktif === b[3]) + '" class="' + (aktif === b[3] ? 'on ' + (b[4] || '') : '') + '">' + b[1] + '</button>'; }).join('') + '</div>';
+    }
+    function senaraiTugasan(jenis) {
+      var kt = kataTT(jenis), list = t.tugasan[jenis];
+      if (!list.length) return '<p class="sub" style="margin:0">Tiada ' + kt.label.toLowerCase() + '.</p>';
+      return list.map(function (g) {
+        var v = t.st[g.id];
+        return '<div class="tdk-row"><span class="grow"><b>' + esc(g.tajuk) + '</b><span class="sub">' + esc(labelTarikh(g.tarikh).replace('Hari ini · ', 'Hari ini, ')) + '</span></span>' +
+          seg(v === true ? 'y' : v === false ? 'n' : '', [['tdk-tg', '✓ ' + kt.ya, ' data-id="' + g.id + '" data-v="1"', 'y', 'ok'], ['tdk-tg', '✗ ' + kt.tak, ' data-id="' + g.id + '" data-v="0"', 'n', 'no']]) + '</div>';
+      }).join('');
+    }
+    var bab = t.bab.filter(function (b) { return b.id === t.babPilih; })[0];
+    box.innerHTML = '<div class="card stack tdk" style="padding:14px 16px;gap:12px">' +
+      '<div class="between"><b style="font-size:16px">Tindakan</b>' + (links.length > 1 ? '' : '<span class="sub">' + esc(k.nama + (k.subjek ? ' · ' + k.subjek : '')) + '</span>') + '</div>' +
+      (links.length > 1 ? '<div class="row" style="gap:6px;flex-wrap:wrap">' + links.map(function (x) { return '<button class="chip tdk-kelas' + (x.id === k.id ? ' on' : '') + '" data-act="tdk-kelas" data-id="' + x.id + '">' + esc(x.nama + (x.subjek ? ' · ' + x.subjek : '')) + '</button>'; }).join('') + '</div>' : '') +
+      (t.luar ? '<div class="luar-nota" style="padding:8px 10px">Tiada internet: kehadiran dan tanda disimpan dalam telefon; PBD perlu internet.</div>' : '') +
+      '<div class="stack" style="gap:6px"><span class="tdk-h">Kehadiran hari ini</span>' +
+        seg(h ? (tak ? 'n' : 'y') : '', [['tdk-hadir', '✓ Hadir', ' data-v="1"', 'y', 'ok'], ['tdk-hadir', '✗ Tidak hadir', ' data-v="0"', 'n', 'no']]) +
+        (tak ? '<div class="row" style="gap:6px;flex-wrap:wrap">' + SEBAB.map(function (sb2) { return '<button class="chip tdk-sebab' + (h.sebab === sb2 ? ' on' : '') + '" data-act="tdk-sebab" data-v="' + esc(sb2) + '">' + esc(sb2) + '</button>'; }).join('') + '</div>' : '') +
+        (!t.adaHari ? '<span class="sub">Kehadiran kelas ini belum direkod hari ini. Jika anda tanda di sini, murid lain dikira hadir.</span>' : '') +
+      '</div>' +
+      '<div class="stack" style="gap:6px"><span class="tdk-h">Kerja rumah</span>' + senaraiTugasan('kr') + '</div>' +
+      '<div class="stack" style="gap:6px"><span class="tdk-h">Kutip buku</span>' + senaraiTugasan('buku') + '</div>' +
+      '<div class="stack" style="gap:6px"><span class="tdk-h">PBD</span>' +
+        (t.bab.length ? '<select class="input" data-input="tdk-bab" aria-label="Pilih Bab">' + t.bab.map(function (b) { return '<option value="' + b.id + '"' + (b.id === t.babPilih ? ' selected' : '') + '>' + esc(b.tajuk) + (t.tp[b.id] ? ' — TP' + t.tp[b.id] : '') + '</option>'; }).join('') + '</select>' +
+          '<div class="tp-pilih">' + [1, 2, 3, 4, 5, 6].map(function (n) { var on = bab && t.tp[bab.id] === n, w = TP_WARNA[n]; return '<button class="tp-btn" data-act="tdk-tp" data-v="' + n + '" aria-pressed="' + on + '" style="background:' + w[0] + ';color:' + w[1] + '"><b>TP' + n + '</b></button>'; }).join('') + '</div>' +
+          '<span class="sub">Tekan TP yang sama sekali lagi untuk padam.</span>'
+        : '<p class="sub" style="margin:0">Belum ada Bab untuk subjek ini. Tulis Bab dalam Assessment.</p>') +
+      '</div>' +
+    '</div>';
+  }
+
+  async function tdkHadir(hadir, sebab) {
+    var t = S.tdk, k = cariKelas(t.kelasId), hari = hariIni();
+    var baris = { kelas_id: k.id, murid_id: t.muridId, tarikh: hari, hadir: hadir, sebab: hadir ? null : (sebab || null) };
+    var payload = t.adaHari ? [baris] : muridKelas(k.id).map(function (m) { return m.id === t.muridId ? baris : { kelas_id: k.id, murid_id: m.id, tarikh: hari, hadir: true, sebab: null }; });
+    var lama = t.hadir, adaLama = t.adaHari;
+    t.hadir = baris; t.adaHari = true; lukisTindakan();
+    var r = await simpanRekod('kehadiran', payload);
+    if (r.error) { t.hadir = lama; t.adaHari = adaLama; lukisTindakan(); toast('Tidak disimpan: ' + errMsg(r.error)); return; }
+    maklumLuarTalian(r);
+    toast(hadir ? 'Ditanda hadir.' : 'Ditanda tidak hadir' + (sebab ? ' (' + sebab + ')' : '') + '.' + (!adaLama ? ' Murid lain dikira hadir.' : ''));
+    var m = S.murid.filter(function (x) { return x.id === t.muridId; })[0];
+    muatHadirMurid(t.muridId, (m.kelas_murid || []).map(function (l) { return { k: cariKelas(l.kelas_id) }; }).filter(function (x) { return x.k; }));
+  }
+
+  async function tdkTugasan(tugasanId, siap) {
+    var t = S.tdk, lama = t.st[tugasanId];
+    t.st[tugasanId] = siap; lukisTindakan();
+    var r = await simpanRekod('status_tugasan', [{ tugasan_id: tugasanId, murid_id: t.muridId, siap: siap }]);
+    if (r.error) { if (lama === undefined) delete t.st[tugasanId]; else t.st[tugasanId] = lama; lukisTindakan(); toast('Tidak disimpan: ' + errMsg(r.error)); return; }
+    maklumLuarTalian(r);
+    var m = S.murid.filter(function (x) { return x.id === t.muridId; })[0];
+    muatKrMurid(t.muridId, (m.kelas_murid || []).map(function (l) { return { k: cariKelas(l.kelas_id) }; }).filter(function (x) { return x.k; }));
+  }
+
+  async function tdkTp(n) {
+    var t = S.tdk, id = t.babPilih;
+    if (!id) return;
+    var lama = t.tp[id], baru = lama === n ? null : n;
+    if (baru) t.tp[id] = baru; else delete t.tp[id];
+    lukisTindakan();
+    var r = baru
+      ? await sb.from('pbd_tp').upsert({ item_id: id, murid_id: t.muridId, kelas_id: t.kelasId, tp: baru }, { onConflict: 'item_id,murid_id' })
+      : await sb.from('pbd_tp').delete().eq('item_id', id).eq('murid_id', t.muridId);
+    if (r.error) { if (lama) t.tp[id] = lama; else delete t.tp[id]; lukisTindakan(); toast('Tidak disimpan: ' + errMsg(r.error)); return; }
+    toast(baru ? 'TP' + baru + ' disimpan.' : 'TP dipadam.');
+    muatAsMurid(t.muridId);
+  }
+
+  /* ---------- Catatan murid ---------- */
+  async function muatCatatan(muridId) {
+    var r = await sb.from('catatan').select('id,teks,dicipta').eq('murid_id', muridId).order('dicipta', { ascending: false }).limit(20);
+    var el = $app.querySelector('[data-catatan]');
+    if (!el) return;
+    if (r.error) { el.innerHTML = '<span class="sub">' + esc(errMsg(r.error)) + '</span>'; return; }
+    var list = r.data || [];
+    el.innerHTML = list.length ? list.map(function (c) {
+      var d = new Date(c.dicipta);
+      return '<div class="catatan-row"><span class="grow"><span style="display:block;white-space:pre-wrap">' + esc(c.teks) + '</span><span class="sub">' + esc(labelTarikh(isoTarikh(d), true).replace('Hari ini · ', 'Hari ini, ')) + ' · ' + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2) + '</span></span><button class="icon-sm" data-act="catatan-padam" data-id="' + c.id + '" aria-label="Padam catatan">' + I.trash + '</button></div>';
+    }).join('') : '<span class="sub">Belum ada catatan.</span>';
+  }
+  async function simpanCatatan(form) {
+    var teks = form.teks.value.trim(), btn = form.querySelector('[type=submit]');
+    if (!teks) { form.teks.focus(); return; }
+    btn.disabled = true;
+    var r = await sb.from('catatan').insert({ murid_id: form.dataset.id, teks: teks });
+    btn.disabled = false;
+    if (r.error) { toast('Tidak disimpan: ' + errMsg(r.error)); return; }
+    form.teks.value = ''; toast('Catatan disimpan.'); muatCatatan(form.dataset.id);
   }
 
   async function muatHadirMurid(muridId, links) {
@@ -2402,6 +2542,17 @@
     'ax-pilih': function (el) { closeSheet(); setHadir(el.dataset.id, el.dataset.hadir === '1', el.dataset.sebab || null); },
     'senarai-murid': function (el) { sheetMurid(el.dataset.id, !!el.dataset.cari); },
     'profil-murid': function (el) { go('#/murid/' + el.dataset.id); },
+    'tdk-kelas': function (el) { S.kelasTerakhir = el.dataset.id; S.tdk = null; muatTindakan(location.hash.split('/')[2], el.dataset.id); },
+    'tdk-hadir': function (el) { var on = el.getAttribute('aria-pressed') === 'true'; if (on) return; tdkHadir(el.dataset.v === '1', null); },
+    'tdk-sebab': function (el) { var h = S.tdk.hadir; tdkHadir(false, h && h.sebab === el.dataset.v ? null : el.dataset.v); },
+    'tdk-tg': function (el) { tdkTugasan(el.dataset.id, el.dataset.v === '1'); },
+    'tdk-tp': function (el) { tdkTp(+el.dataset.v); },
+    'catatan-padam': async function (el) {
+      if (!confirm('Padam catatan ini? Tidak boleh dikembalikan.')) return;
+      var r = await sb.from('catatan').delete().eq('id', el.dataset.id);
+      if (r.error) { toast(errMsg(r.error)); return; }
+      toast('Catatan dipadam.'); muatCatatan(location.hash.split('/')[2]);
+    },
     'edit-murid': function (el) { editMurid(el.dataset.id); },
     'buang-murid': function (el) { buangMurid(el.dataset.id, el.dataset.kelas); },
     'padam-kelas': async function (el) {
@@ -2452,12 +2603,15 @@
     } else if (el.dataset.input === 'cari-murid') {
       var box = $sheet.querySelector('[data-murid-list]');
       if (box) box.innerHTML = senaraiMuridHtml(el.dataset.id, el.value.trim());
+    } else if (el.dataset.input === 'tdk-bab' && S.tdk) {
+      S.tdk.babPilih = el.value; lukisTindakan();
     }
   });
 
   /* ---------- Borang ---------- */
   var FORM = {
     'tugasan': simpanTugasan,
+    'catatan': simpanCatatan,
     'pbd-tulis': simpanBab,
     'gred': function (form) { return simpanGred(form, false); },
     'had': simpanHad,

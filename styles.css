@@ -323,3 +323,23 @@ textarea.input { min-height: 160px; resize: vertical; line-height: 1.5; }
 .luar-nota { padding: 12px 14px; font-size: 13px; line-height: 1.5; border-left: 4px solid #F59E0B; }
 .kutip-luar { font-size: 13px; color: #FDE68A; min-height: 0; text-align: center; }
 button.saved { border: none; font: inherit; cursor: pointer; }
+
+/* ===== Tindakan dalam Student Profile ===== */
+.tdk-h { font-size: 12px; font-weight: 800; letter-spacing: .02em; text-transform: uppercase; color: var(--sub); }
+.tdk-seg { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; flex-shrink: 0; }
+.tdk-seg button { min-height: 44px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--card); color: var(--text); font-weight: 700; font-size: 14px; padding: 6px 10px; }
+.tdk-seg button.on.ok { background: #DCFCE7; border-color: #16A34A; color: #166534; }
+.tdk-seg button.on.no { background: #FFEDD5; border-color: #EA580C; color: #9A3412; }
+[data-mode="dark"] .tdk-seg button.on.ok { background: #052E16; color: #86EFAC; }
+[data-mode="dark"] .tdk-seg button.on.no { background: #431407; color: #FED7AA; }
+.tdk-row { display: flex; flex-direction: column; gap: 6px; padding: 8px 0; border-top: 1px solid var(--line); }
+.tdk-row:first-of-type { border-top: none; }
+.tdk-row b { display: block; font-size: 14px; }
+.tdk-sebab, .tdk-kelas { border: 1.5px solid var(--line); background: var(--card); color: var(--text); min-height: 36px; }
+.tdk-sebab.on, .tdk-kelas.on { background: var(--acc); border-color: var(--acc); color: #fff; }
+.tdk .tp-btn { min-height: 46px; }
+.catatan-in { min-height: 48px; resize: vertical; }
+.catatan-row { display: flex; gap: 8px; align-items: flex-start; padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.catatan-row:first-child { border-top: none; }
+.tp-btn[aria-pressed="true"] { outline: 3px solid var(--text); outline-offset: 1px; }
+.catatan-in { height: 48px; }
