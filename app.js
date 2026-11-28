@@ -12,7 +12,7 @@
   var $toast = document.getElementById('toast');
 
   /* Nombor versi app. Naikkan SERENTAK dengan version.json dan CACHE dalam sw.js. */
-  var VERSI = '15';
+  var VERSI = '16';
 
   var S = { session: null, profil: null, kelas: [], murid: [], loaded: false, q: '', authTab: 'masuk', recovery: false, scanner: null };
 
@@ -970,26 +970,28 @@
   function sheetTugasanBaru(kelasId, t, jenis) {
     jenis = t ? (t.jenis || 'kr') : (jenis || 'kr');
     var kt = kataTT(jenis);
-    openSheet('<h2>' + (t ? 'Ubah tajuk' : kt.label + ' baharu') + '</h2>' +
+    openSheet('<h2>' + (t ? 'Ubah ' + kt.label.toLowerCase() : kt.label + ' baharu') + '</h2>' +
       '<form class="stack" style="gap:14px" data-form="tugasan" data-kelas="' + kelasId + '" data-jenis="' + jenis + '"' + (t ? ' data-id="' + t.id + '"' : '') + ' novalidate>' +
         '<label class="field"><span>' + (jenis === 'buku' ? 'Buku apa?' : 'Tajuk') + '</span><input class="input" name="tajuk" maxlength="120" placeholder="' + kt.tajuk + '" value="' + (t ? esc(t.tajuk) : '') + '" required></label>' +
+        '<label class="field"><span>Tarikh</span><input class="input" name="tarikh" type="date" value="' + (t ? t.tarikh : hariIni()) + '" required></label>' +
         '<p class="error" data-err></p><button class="btn block" type="submit">' + (t ? 'Simpan' : jenis === 'buku' ? 'Mula scan' : 'Cipta') + '</button></form>',
       { label: t ? 'Ubah tajuk' : kt.label + ' baharu', focus: 'input[name=tajuk]' });
   }
 
   async function simpanTugasan(form) {
     var err = form.querySelector('[data-err]'), btn = form.querySelector('[type=submit]');
-    var tajuk = form.tajuk.value.trim();
+    var tajuk = form.tajuk.value.trim(), tarikh = form.tarikh ? form.tarikh.value : hariIni();
     if (!tajuk) { err.textContent = 'Tajuk tidak boleh kosong.'; return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(tarikh)) { err.textContent = 'Pilih tarikh.'; return; }
     btn.disabled = true;
     var kelasId = form.dataset.kelas, id = form.dataset.id;
     var r = id
-      ? await sb.from('tugasan').update({ tajuk: tajuk }).eq('id', id)
-      : await sb.from('tugasan').insert({ kelas_id: kelasId, tajuk: tajuk, tarikh: hariIni(), jenis: form.dataset.jenis === 'buku' ? 'buku' : 'kr' }).select('id').single();
+      ? await sb.from('tugasan').update({ tajuk: tajuk, tarikh: tarikh }).eq('id', id)
+      : await sb.from('tugasan').insert({ kelas_id: kelasId, tajuk: tajuk, tarikh: tarikh, jenis: form.dataset.jenis === 'buku' ? 'buku' : 'kr' }).select('id').single();
     btn.disabled = false;
     if (r.error) { err.textContent = errMsg(r.error); return; }
     closeSheet();
-    if (id) { if (S.tt && S.tt.tugasan.id === id) { S.tt.tugasan.tajuk = tajuk; lukisTugasan(); } toast('Tajuk dikemas kini.'); }
+    if (id) { if (S.tt && S.tt.tugasan.id === id) { S.tt.tugasan.tajuk = tajuk; S.tt.tugasan.tarikh = tarikh; lukisTugasan(); } toast('Dikemas kini.'); }
     else if (form.dataset.jenis === 'buku') { sediaBunyi(); S.tt = null; go('#/kutip/' + kelasId + '/' + r.data.id); }
     else go('#/modul/tasktrack/' + kelasId + '/' + r.data.id);
   }
@@ -1049,7 +1051,7 @@
       '<div data-outbox>' + htmlOutbox() + '</div>' +
       (tt.luar ? '<div class="card luar-nota">Tiada internet. Tanda disimpan dalam telefon dan dihantar automatik bila ada isyarat.</div>' : '') +
       '<div class="card between" style="padding:12px 14px;gap:8px"><div class="grow" style="min-width:0"><b style="display:block;font-size:16px">' + esc(tt.tugasan.tajuk) + '</b><span class="sub">' + kt.label + ' · ' + esc(labelTarikh(tt.tugasan.tarikh, true)) + '</span></div>' +
-        '<button class="icon-sm" data-act="tt-ubah" aria-label="Ubah tajuk">' + I.edit + '</button><button class="icon-sm" data-act="tt-padam" aria-label="Padam tugasan" style="color:var(--danger)">' + I.trash + '</button></div>' +
+        '<button class="icon-sm" data-act="tt-ubah" aria-label="Ubah tajuk dan tarikh">' + I.edit + '</button><button class="icon-sm" data-act="tt-padam" aria-label="Padam tugasan" style="color:var(--danger)">' + I.trash + '</button></div>' +
       '<div class="card between" style="padding:14px 16px">' +
         '<div class="row" style="align-items:baseline;gap:6px"><span style="font-size:30px;font-weight:800;color:var(--acc)" data-tt-siap>' + (c.mula ? c.siap : '–') + '</span><span class="sub">/ ' + c.murid.length + ' ' + kt.ya.toLowerCase() + '</span></div>' +
         (c.tak ? '<span class="chip" style="background:#FFEDD5;color:#C2410C" data-tt-tak>' + c.tak + ' ' + kt.tak.toLowerCase() + '</span>' : c.mula && !c.kosong ? '<span class="chip" style="background:var(--tint-now);color:var(--ok)" data-tt-tak>' + I.check + ' ' + kt.semua + '</span>' : '<span class="chip" style="background:#FEF3C7;color:#92400E" data-tt-tak>' + (c.mula ? c.kosong + ' belum ditanda' : 'Belum ditanda') + '</span>') +
