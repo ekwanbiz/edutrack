@@ -12,7 +12,7 @@
   var $toast = document.getElementById('toast');
 
   /* Nombor versi app. Naikkan SERENTAK dengan version.json dan CACHE dalam sw.js. */
-  var VERSI = '11';
+  var VERSI = '12';
 
   var S = { session: null, profil: null, kelas: [], murid: [], loaded: false, q: '', authTab: 'masuk', recovery: false, scanner: null };
 
@@ -420,6 +420,7 @@
       if (h[0] === 'urus' && h[1] === 'kelas' && h[2]) return renderUrusKelas(h[2]);
       if (h[0] === 'urus') return renderUrus();
       if (h[0] === 'modul' && h[1] === 'attendx' && h[2]) return renderAttendX(h[2], h[3]);
+      if (h[0] === 'modul' && h[1] === 'tasktrack' && h[2] && (h[3] === 'kr' || h[3] === 'buku')) return renderTaskTrack(h[2], h[3]);
       if (h[0] === 'modul' && h[1] === 'tasktrack' && h[2] && h[3]) return renderTugasan(h[2], h[3]);
       if (h[0] === 'modul' && h[1] === 'tasktrack' && h[2]) return renderTaskTrack(h[2]);
       if (h[0] === 'kutip' && h[1] && h[2]) return renderKutip(h[1], h[2]);
@@ -928,36 +929,51 @@
     return '<div class="row"><a class="icon-btn" href="' + (balik || '#/kelas/' + k.id) + '" aria-label="Kembali">' + I.back + '</a><div class="row" style="gap:10px">' + logo(id, 40) + '<div><h2>' + nama + '</h2><span class="sub">' + esc(k.nama + (k.subjek ? ' · ' + k.subjek : '')) + '</span></div></div></div>';
   }
 
-  async function renderTaskTrack(kelasId) {
+  /* Dua jenis tugasan: 'kr' kerja rumah, 'buku' kutip buku (tidak semestinya kerja rumah). */
+  function kataTT(jenis) {
+    return jenis === 'buku'
+      ? { label: 'Kutip buku', ya: 'Hantar', tak: 'Tidak hantar', semua: 'Semua hantar', tajuk: 'cth. Buku latihan Matematik' }
+      : { label: 'Kerja rumah', ya: 'Siap', tak: 'Tidak siap', semua: 'Semua siap', tajuk: 'cth. Latihan m/s 34' };
+  }
+
+  async function renderTaskTrack(kelasId, tab) {
     var k = cariKelas(kelasId);
     if (!k) return go('#/');
-    $app.innerHTML = '<div class="page">' + kepalaModul(k, 'tasktrack', 'TaskTrack') + '<p class="sub">Memuatkan…</p></div>';
-    var r = await sb.rpc('ringkasan_tugasan', { p_kelas: k.id, p_had: 100 });
-    var luar = !!(r.error && rangkaianGagal(r.error)), cKey = 'et_cache_ttl_' + uid() + '_' + k.id;
+    tab = tab === 'buku' ? 'buku' : (tab === 'kr' ? 'kr' : pref.get('tt_tab', 'kr'));
+    pref.set('tt_tab', tab);
+    var hash = location.hash, kt = kataTT(tab);
+    var tabs = '<div class="seg"><button data-act="tt-tab" data-id="' + k.id + '" data-tab="kr" aria-pressed="' + (tab === 'kr') + '">Kerja rumah</button><button data-act="tt-tab" data-id="' + k.id + '" data-tab="buku" aria-pressed="' + (tab === 'buku') + '">Kutip buku</button></div>';
+    $app.innerHTML = '<div class="page">' + kepalaModul(k, 'tasktrack', 'TaskTrack') + tabs + '<p class="sub">Memuatkan…</p></div>';
+    var r = await sb.rpc('ringkasan_tugasan', { p_kelas: k.id, p_had: 100, p_jenis: tab });
+    var luar = !!(r.error && rangkaianGagal(r.error)), cKey = 'et_cache_ttl_' + uid() + '_' + k.id + '_' + tab;
     if (r.error && !luar) throw r.error;
-    if (location.hash !== '#/modul/tasktrack/' + k.id) return;
+    if (location.hash !== hash) return;
     var bil = muridKelas(k.id).length, list = luar ? bacaLS(cKey, []) : (r.data || []);
     if (!luar) simpanLS(cKey, list.slice(0, 30));
-    $app.innerHTML = '<div class="page">' + kepalaModul(k, 'tasktrack', 'TaskTrack') +
+    $app.innerHTML = '<div class="page">' + kepalaModul(k, 'tasktrack', 'TaskTrack') + tabs +
       '<div data-outbox>' + htmlOutbox() + '</div>' +
-      (luar ? '<div class="card luar-nota">Tiada internet. Senarai ini salinan terakhir dalam telefon; tugasan baharu perlu internet.</div>' : '') +
-      '<button class="btn block" data-act="tt-baru" data-id="' + k.id + '">+ Tugasan baharu</button>' +
+      (luar ? '<div class="card luar-nota">Tiada internet. Senarai ini salinan terakhir dalam telefon; ' + (tab === 'buku' ? 'kutip buku' : 'kerja rumah') + ' baharu perlu internet.</div>' : '') +
+      (tab === 'buku'
+        ? '<button class="btn block" data-act="tt-baru" data-id="' + k.id + '" data-jenis="buku">' + I.qr.replace(/width="34" height="34"/, 'width="22" height="22"') + ' Kutip buku baharu</button>'
+        : '<button class="btn block" data-act="tt-baru" data-id="' + k.id + '" data-jenis="kr">+ Kerja rumah baharu</button>') +
       (list.length ? '<div class="card list-card">' + list.map(function (t) {
-        var info = t.ditanda ? t.siap + '/' + bil + ' siap' : 'Belum ditanda';
+        var info = t.ditanda ? t.siap + '/' + bil + ' ' + kt.ya.toLowerCase() : 'Belum ditanda';
         return '<a class="list-item" href="#/modul/tasktrack/' + k.id + '/' + t.id + '"><span class="grow"><b style="display:block;font-size:15px">' + esc(t.tajuk) + '</b><span class="sub">' + esc(labelTarikh(t.tarikh, true)) + ' · ' + info + '</span></span>' +
-          (t.tidak_siap ? '<span class="chip" style="background:#FFEDD5;color:#C2410C">' + t.tidak_siap + ' tak siap</span>' : (t.ditanda ? '<span class="chip" style="background:var(--tint-now);color:var(--ok)">' + I.check + '</span>' : '')) +
+          (t.tidak_siap ? '<span class="chip" style="background:#FFEDD5;color:#C2410C">' + t.tidak_siap + (tab === 'buku' ? ' tak hantar' : ' tak siap') + '</span>' : (t.ditanda ? '<span class="chip" style="background:var(--tint-now);color:var(--ok)">' + I.check + '</span>' : '')) +
           '<span class="muted">' + I.chev + '</span></a>';
       }).join('') + '</div>'
-      : '<div class="card empty"><p class="sub">Belum ada tugasan. Tekan <b>+ Tugasan baharu</b> untuk mula.</p></div>') +
+      : '<div class="card empty"><p class="sub">' + (tab === 'buku' ? 'Belum ada rekod kutip buku. Tekan <b>Kutip buku baharu</b>: taip nama buku, kemudian kamera terus dibuka untuk scan.' : 'Belum ada kerja rumah. Tekan <b>+ Kerja rumah baharu</b> untuk mula.') + '</p></div>') +
     '</div>';
   }
 
-  function sheetTugasanBaru(kelasId, t) {
-    openSheet('<h2>' + (t ? 'Ubah tajuk' : 'Tugasan baharu') + '</h2>' +
-      '<form class="stack" style="gap:14px" data-form="tugasan" data-kelas="' + kelasId + '"' + (t ? ' data-id="' + t.id + '"' : '') + ' novalidate>' +
-        '<label class="field"><span>Tajuk</span><input class="input" name="tajuk" maxlength="120" placeholder="cth. Latihan m/s 34" value="' + (t ? esc(t.tajuk) : '') + '" required></label>' +
-        '<p class="error" data-err></p><button class="btn block" type="submit">' + (t ? 'Simpan' : 'Cipta') + '</button></form>',
-      { label: t ? 'Ubah tajuk' : 'Tugasan baharu', focus: 'input[name=tajuk]' });
+  function sheetTugasanBaru(kelasId, t, jenis) {
+    jenis = t ? (t.jenis || 'kr') : (jenis || 'kr');
+    var kt = kataTT(jenis);
+    openSheet('<h2>' + (t ? 'Ubah tajuk' : kt.label + ' baharu') + '</h2>' +
+      '<form class="stack" style="gap:14px" data-form="tugasan" data-kelas="' + kelasId + '" data-jenis="' + jenis + '"' + (t ? ' data-id="' + t.id + '"' : '') + ' novalidate>' +
+        '<label class="field"><span>' + (jenis === 'buku' ? 'Buku apa?' : 'Tajuk') + '</span><input class="input" name="tajuk" maxlength="120" placeholder="' + kt.tajuk + '" value="' + (t ? esc(t.tajuk) : '') + '" required></label>' +
+        '<p class="error" data-err></p><button class="btn block" type="submit">' + (t ? 'Simpan' : jenis === 'buku' ? 'Mula scan' : 'Cipta') + '</button></form>',
+      { label: t ? 'Ubah tajuk' : kt.label + ' baharu', focus: 'input[name=tajuk]' });
   }
 
   async function simpanTugasan(form) {
@@ -968,27 +984,29 @@
     var kelasId = form.dataset.kelas, id = form.dataset.id;
     var r = id
       ? await sb.from('tugasan').update({ tajuk: tajuk }).eq('id', id)
-      : await sb.from('tugasan').insert({ kelas_id: kelasId, tajuk: tajuk, tarikh: hariIni() }).select('id').single();
+      : await sb.from('tugasan').insert({ kelas_id: kelasId, tajuk: tajuk, tarikh: hariIni(), jenis: form.dataset.jenis === 'buku' ? 'buku' : 'kr' }).select('id').single();
     btn.disabled = false;
     if (r.error) { err.textContent = errMsg(r.error); return; }
     closeSheet();
     if (id) { if (S.tt && S.tt.tugasan.id === id) { S.tt.tugasan.tajuk = tajuk; lukisTugasan(); } toast('Tajuk dikemas kini.'); }
+    else if (form.dataset.jenis === 'buku') { sediaBunyi(); S.tt = null; go('#/kutip/' + kelasId + '/' + r.data.id); }
     else go('#/modul/tasktrack/' + kelasId + '/' + r.data.id);
   }
 
   async function padamTugasan() {
     var tt = S.tt;
-    if (!confirm('Padam tugasan "' + tt.tugasan.tajuk + '"?\nSemua tanda Siap / Tidak siap untuk tugasan ini akan hilang dan tidak boleh dikembalikan.')) return;
+    var kt = kataTT(tt.tugasan.jenis);
+    if (!confirm('Padam ' + kt.label.toLowerCase() + ' "' + tt.tugasan.tajuk + '"?\nSemua tanda ' + kt.ya + ' / ' + kt.tak + ' untuk rekod ini akan hilang dan tidak boleh dikembalikan.')) return;
     var r = await sb.from('tugasan').delete().eq('id', tt.tugasan.id);
     if (r.error) { toast(errMsg(r.error)); return; }
     toast('Tugasan dipadam.');
-    go('#/modul/tasktrack/' + tt.kelasId);
+    go('#/modul/tasktrack/' + tt.kelasId + '/' + (tt.tugasan.jenis || 'kr'));
   }
 
   /* ---------- TaskTrack: satu tugasan ---------- */
   async function muatTugasan(kelasId, tugasanId) {
     var res = await Promise.all([
-      sb.from('tugasan').select('id,tajuk,tarikh,kelas_id').eq('id', tugasanId).maybeSingle(),
+      sb.from('tugasan').select('id,tajuk,tarikh,kelas_id,jenis').eq('id', tugasanId).maybeSingle(),
       sb.from('status_tugasan').select('murid_id,siap').eq('tugasan_id', tugasanId)
     ]);
     var e = res[0].error || res[1].error, cKey = 'et_cache_tt_' + uid() + '_' + tugasanId, tugasan, rows = {}, luar = false;
@@ -1011,7 +1029,7 @@
   async function renderTugasan(kelasId, tugasanId) {
     var k = cariKelas(kelasId);
     if (!k) return go('#/');
-    $app.innerHTML = '<div class="page">' + kepalaModul(k, 'tasktrack', 'TaskTrack', '#/modul/tasktrack/' + k.id) + '<p class="sub">Memuatkan…</p></div>';
+    $app.innerHTML = '<div class="page">' + kepalaModul(k, 'tasktrack', 'TaskTrack', '#/modul/tasktrack/' + k.id + '/' + pref.get('tt_tab', 'kr')) + '<p class="sub">Memuatkan…</p></div>';
     var ada = await muatTugasan(k.id, tugasanId);
     if (location.hash !== '#/modul/tasktrack/' + k.id + '/' + tugasanId) return;
     if (!ada) { toast('Tugasan tidak dijumpai.'); return go('#/modul/tasktrack/' + k.id); }
@@ -1025,34 +1043,34 @@
   }
 
   function lukisTugasan() {
-    var tt = S.tt, k = cariKelas(tt.kelasId), c = kiraTT();
-    $app.innerHTML = '<div class="page">' + kepalaModul(k, 'tasktrack', 'TaskTrack', '#/modul/tasktrack/' + k.id) +
+    var tt = S.tt, k = cariKelas(tt.kelasId), c = kiraTT(), kt = kataTT(tt.tugasan.jenis), balik = '#/modul/tasktrack/' + k.id + '/' + (tt.tugasan.jenis || 'kr');
+    $app.innerHTML = '<div class="page">' + kepalaModul(k, 'tasktrack', 'TaskTrack', balik) +
       '<div data-outbox>' + htmlOutbox() + '</div>' +
       (tt.luar ? '<div class="card luar-nota">Tiada internet. Tanda disimpan dalam telefon dan dihantar automatik bila ada isyarat.</div>' : '') +
-      '<div class="card between" style="padding:12px 14px;gap:8px"><div class="grow" style="min-width:0"><b style="display:block;font-size:16px">' + esc(tt.tugasan.tajuk) + '</b><span class="sub">' + esc(labelTarikh(tt.tugasan.tarikh, true)) + '</span></div>' +
+      '<div class="card between" style="padding:12px 14px;gap:8px"><div class="grow" style="min-width:0"><b style="display:block;font-size:16px">' + esc(tt.tugasan.tajuk) + '</b><span class="sub">' + kt.label + ' · ' + esc(labelTarikh(tt.tugasan.tarikh, true)) + '</span></div>' +
         '<button class="icon-sm" data-act="tt-ubah" aria-label="Ubah tajuk">' + I.edit + '</button><button class="icon-sm" data-act="tt-padam" aria-label="Padam tugasan" style="color:var(--danger)">' + I.trash + '</button></div>' +
       '<div class="card between" style="padding:14px 16px">' +
-        '<div class="row" style="align-items:baseline;gap:6px"><span style="font-size:30px;font-weight:800;color:var(--acc)" data-tt-siap>' + (c.mula ? c.siap : '–') + '</span><span class="sub">/ ' + c.murid.length + ' siap</span></div>' +
-        (c.tak ? '<span class="chip" style="background:#FFEDD5;color:#C2410C" data-tt-tak>' + c.tak + ' tidak siap</span>' : c.mula && !c.kosong ? '<span class="chip" style="background:var(--tint-now);color:var(--ok)" data-tt-tak>' + I.check + ' Semua siap</span>' : '<span class="chip" style="background:#FEF3C7;color:#92400E" data-tt-tak>' + (c.mula ? c.kosong + ' belum ditanda' : 'Belum ditanda') + '</span>') +
+        '<div class="row" style="align-items:baseline;gap:6px"><span style="font-size:30px;font-weight:800;color:var(--acc)" data-tt-siap>' + (c.mula ? c.siap : '–') + '</span><span class="sub">/ ' + c.murid.length + ' ' + kt.ya.toLowerCase() + '</span></div>' +
+        (c.tak ? '<span class="chip" style="background:#FFEDD5;color:#C2410C" data-tt-tak>' + c.tak + ' ' + kt.tak.toLowerCase() + '</span>' : c.mula && !c.kosong ? '<span class="chip" style="background:var(--tint-now);color:var(--ok)" data-tt-tak>' + I.check + ' ' + kt.semua + '</span>' : '<span class="chip" style="background:#FEF3C7;color:#92400E" data-tt-tak>' + (c.mula ? c.kosong + ' belum ditanda' : 'Belum ditanda') + '</span>') +
       '</div>' +
       (c.murid.length
         ? '<div class="tt-aksi">' +
-            (c.kosong ? '<button class="btn" data-act="tt-semua" data-tt-semua>' + I.check + (c.mula ? ' Baki semua siap' : ' Semua siap') + '</button>' : '') +
-            '<button class="btn secondary" data-act="tt-kutip">' + I.qr.replace(/width="34" height="34"/, 'width="22" height="22"') + ' Kutip Buku</button>' +
+            (c.kosong ? '<button class="btn" data-act="tt-semua" data-tt-semua>' + I.check + (c.mula ? ' Baki ' + kt.semua.toLowerCase() : ' ' + kt.semua) + '</button>' : '') +
+            '<button class="btn secondary" data-act="tt-kutip">' + I.qr.replace(/width="34" height="34"/, 'width="22" height="22"') + (tt.tugasan.jenis === 'buku' ? ' Scan buku' : ' Kutip Buku') + '</button>' +
           '</div>' +
-          '<p class="sub" style="margin:0">' + (c.mula ? 'Tekan nama murid untuk tukar <b>Siap / Tidak siap</b>.' : 'Tekan <b>Semua siap</b> lalu tekan nama yang tidak siap, atau guna <b>Kutip Buku</b> untuk scan buku yang dihantar.') + '</p>' +
+          '<p class="sub" style="margin:0">' + (c.mula ? 'Tekan nama murid untuk tukar <b>' + kt.ya + ' / ' + kt.tak + '</b>.' : (tt.tugasan.jenis === 'buku' ? 'Tekan <b>Scan buku</b> untuk scan buku yang dihantar, atau <b>Semua hantar</b> lalu tekan nama yang tidak hantar.' : 'Tekan <b>Semua siap</b> lalu tekan nama yang tidak siap, atau guna <b>Kutip Buku</b> untuk scan buku yang dihantar.')) + '</p>' +
           '<div class="ax-grid' + (c.mula ? '' : ' belum') + '" data-tt-grid>' + gridTugasan(c.murid) + '</div>'
         : '<div class="card empty"><p class="sub">Belum ada murid dalam kelas ini.</p><a class="btn" href="#/urus/kelas/' + k.id + '">Tambah murid</a></div>') +
     '</div>';
   }
 
   function gridTugasan(murid) {
-    var tt = S.tt;
+    var tt = S.tt, kt = kataTT(tt.tugasan.jenis);
     return murid.map(function (m, i) {
       var v = tt.rows[m.id], on = v === true, off = v === false;
-      return '<button class="ax-kad' + (off ? ' off' : on ? ' on' : '') + '" data-tt-murid="' + m.id + '" aria-label="' + esc(m.nama) + (off ? ', tidak siap' : on ? ', siap' : ', belum ditanda') + '">' +
+      return '<button class="ax-kad' + (off ? ' off' : on ? ' on' : '') + '" data-tt-murid="' + m.id + '" aria-label="' + esc(m.nama) + (off ? ', ' + kt.tak.toLowerCase() : on ? ', ' + kt.ya.toLowerCase() : ', belum ditanda') + '">' +
         '<span class="ax-nama">' + (m.no || i + 1) + '. ' + esc(namaPendek(m.nama)) + '</span>' +
-        '<span class="ax-st">' + (off ? '✗ Tidak siap' : on ? '✓ Siap' : '') + '</span></button>';
+        '<span class="ax-st">' + (off ? '✗ ' + kt.tak : on ? '✓ ' + kt.ya : '') + '</span></button>';
     }).join('');
   }
 
@@ -1074,7 +1092,7 @@
     if (!el || !S.tt) return;
     var c = kiraTT(), id = el.dataset.ttMurid, v = S.tt.rows[id];
     if (!c.mula) {
-      toast('Tekan "Semua siap" atau "Kutip Buku" dahulu.');
+      toast(S.tt.tugasan.jenis === 'buku' ? 'Tekan "Scan buku" atau "Semua hantar" dahulu.' : 'Tekan "Semua siap" atau "Kutip Buku" dahulu.');
       var b = $app.querySelector('[data-tt-semua]');
       if (b) { b.classList.remove('goyang'); void b.offsetWidth; b.classList.add('goyang'); }
       return;
@@ -1489,7 +1507,7 @@
     var res = await Promise.all([
       sb.rpc('analisis_murid', { p_kelas: k.id, p_dari: dari }),
       sb.rpc('ringkasan_kehadiran', { p_kelas: k.id, p_had: 400 }),
-      sb.rpc('ringkasan_tugasan', { p_kelas: k.id, p_had: 300 }),
+      sb.rpc('ringkasan_tugasan', { p_kelas: k.id, p_had: 300, p_jenis: 'kr' }),
       sb.rpc('taburan_pbd', { p_kelas: k.id }),
       sb.rpc('ringkasan_penilaian', { p_kelas: k.id, p_jenis: 'kuiz' }),
       sb.rpc('ringkasan_penilaian', { p_kelas: k.id, p_jenis: 'peperiksaan' }),
@@ -2253,12 +2271,15 @@
   }
 
   async function muatKrMurid(muridId, links) {
-    var r = await sb.from('status_tugasan').select('siap,tugasan(tajuk,tarikh,kelas_id)').eq('murid_id', muridId).limit(1000);
+    var r = await sb.from('status_tugasan').select('siap,tugasan(tajuk,tarikh,kelas_id,jenis)').eq('murid_id', muridId).limit(1000);
     var el = $app.querySelector('[data-prof-kr]');
     if (!el) return;
     if (r.error) { el.innerHTML = '<b style="display:block">TaskTrack</b><span class="error">' + esc(errMsg(r.error)) + '</span>'; return; }
-    var data = (r.data || []).filter(function (x) { return x.tugasan; });
-    if (!data.length) { el.innerHTML = '<b style="display:block">TaskTrack</b><span class="sub">Belum ada rekod kerja rumah.</span>'; return; }
+    var semua = (r.data || []).filter(function (x) { return x.tugasan; });
+    var data = semua.filter(function (x) { return x.tugasan.jenis !== 'buku'; });
+    var bukuTak = semua.filter(function (x) { return x.tugasan.jenis === 'buku' && !x.siap; }).sort(function (a, b) { return a.tugasan.tarikh < b.tugasan.tarikh ? 1 : -1; });
+    var nBuku = bukuTak.length ? '<span class="sub" style="display:block;margin-top:6px"><b>Buku tidak hantar:</b> ' + bukuTak.slice(0, 5).map(function (h) { return esc(h.tugasan.tajuk); }).join(', ') + (bukuTak.length > 5 ? ' dan ' + (bukuTak.length - 5) + ' lagi' : '') + '</span>' : '';
+    if (!data.length) { el.innerHTML = '<b style="display:block">TaskTrack</b><span class="sub">Belum ada rekod kerja rumah.</span>' + nBuku; return; }
     var perKelas = links.map(function (x) {
       var d = data.filter(function (h) { return h.tugasan.kelas_id === x.k.id; });
       return { k: x.k, jumlah: d.length, siap: d.filter(function (h) { return h.siap; }).length };
@@ -2268,7 +2289,7 @@
       perKelas.map(function (x) {
         return '<span class="sub" style="display:block">' + esc(x.k.nama + (x.k.subjek ? ' · ' + x.k.subjek : '')) + ': <b>' + x.siap + '/' + x.jumlah + '</b> siap</span>';
       }).join('') +
-      (tak.length ? '<span class="sub" style="display:block;margin-top:6px;color:#C2410C"><b>Belum siap:</b> ' + tak.slice(0, 5).map(function (h) { return esc(h.tugasan.tajuk); }).join(', ') + (tak.length > 5 ? ' dan ' + (tak.length - 5) + ' lagi' : '') + '</span>' : '<span class="sub" style="display:block;margin-top:6px">Tiada kerja rumah tertunggak.</span>');
+      (tak.length ? '<span class="sub" style="display:block;margin-top:6px;color:#C2410C"><b>Belum siap:</b> ' + tak.slice(0, 5).map(function (h) { return esc(h.tugasan.tajuk); }).join(', ') + (tak.length > 5 ? ' dan ' + (tak.length - 5) + ' lagi' : '') + '</span>' : '<span class="sub" style="display:block;margin-top:6px">Tiada kerja rumah tertunggak.</span>') + nBuku;
   }
 
   async function muatAsMurid(muridId) {
@@ -2369,7 +2390,8 @@
     'nilai-baru': function (el) { sheetPenilaian(el.dataset.id, el.dataset.jenis); },
     'nilai-ubah': function () { sheetPenilaian(S.nilai.kelasId, null, S.nilai.p); },
     'nilai-padam': function () { padamPenilaian(); },
-    'tt-baru': function (el) { sheetTugasanBaru(el.dataset.id); },
+    'tt-baru': function (el) { sheetTugasanBaru(el.dataset.id, null, el.dataset.jenis); },
+    'tt-tab': function (el) { location.replace('#/modul/tasktrack/' + el.dataset.id + '/' + el.dataset.tab); },
     'tt-ubah': function () { sheetTugasanBaru(S.tt.kelasId, S.tt.tugasan); },
     'tt-padam': function () { padamTugasan(); },
     'tt-semua': function () { var tt = S.tt; simpanStatus(muridKelas(tt.kelasId).filter(function (m) { return tt.rows[m.id] === undefined; }).map(function (m) { return [m.id, true]; })); },
@@ -2526,7 +2548,7 @@
     try {
       var res = await Promise.all([
         ambilSemua('kehadiran', 'kelas_id,murid_id,tarikh,hadir,sebab', ['tarikh', 'kelas_id', 'murid_id']),
-        ambilSemua('status_tugasan', 'tugasan_id,murid_id,siap,tugasan(kelas_id,tajuk,tarikh)', ['tugasan_id', 'murid_id']),
+        ambilSemua('status_tugasan', 'tugasan_id,murid_id,siap,tugasan(kelas_id,tajuk,tarikh,jenis)', ['tugasan_id', 'murid_id']),
         ambilSemua('pbd_tp', 'item_id,kelas_id,murid_id,tp,pbd_item(tajuk,urutan)', ['item_id', 'murid_id']),
         ambilSemua('markah', 'penilaian_id,murid_id,markah,penilaian(kelas_id,jenis,tajuk,tarikh,markah_penuh)', ['penilaian_id', 'murid_id'])
       ]);
@@ -2540,7 +2562,7 @@
       }
       S.kelas.forEach(function (k) { muridKelas(k.id).forEach(function (m) { b('Murid', k.id, m.id, '', 'Senarai murid', '', ''); }); });
       res[0].forEach(function (r) { b('Kehadiran', r.kelas_id, r.murid_id, r.tarikh, 'Kehadiran', r.hadir ? 'Hadir' : 'Tidak hadir', r.sebab); });
-      res[1].forEach(function (r) { if (r.tugasan) b('Kerja rumah', r.tugasan.kelas_id, r.murid_id, r.tugasan.tarikh, r.tugasan.tajuk, r.siap ? 'Siap' : 'Tidak siap', ''); });
+      res[1].forEach(function (r) { if (!r.tugasan) return; var bk = r.tugasan.jenis === 'buku'; b(bk ? 'Kutip buku' : 'Kerja rumah', r.tugasan.kelas_id, r.murid_id, r.tugasan.tarikh, r.tugasan.tajuk, bk ? (r.siap ? 'Hantar' : 'Tidak hantar') : (r.siap ? 'Siap' : 'Tidak siap'), ''); });
       res[2].forEach(function (r) { if (r.pbd_item) b('PBD', r.kelas_id, r.murid_id, '', r.pbd_item.tajuk, 'TP' + r.tp, ''); });
       res[3].forEach(function (r) { var p = r.penilaian; if (p) b(p.jenis === 'kuiz' ? 'Kuiz' : 'Peperiksaan', p.kelas_id, r.murid_id, p.tarikh, p.tajuk, nomb(r.markah) + '/' + nomb(p.markah_penuh), Math.round(r.markah / p.markah_penuh * 100) + '%'); });
       var csv = '﻿' + baris.map(function (r) { return r.map(sel).join(','); }).join('\r\n');
